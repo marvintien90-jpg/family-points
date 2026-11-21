@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
+import { useDailyBrief } from "../Brief";
 import { useUi, RollNumber, floatPoints, useTab } from "../ui/ui";
 import { Ledger, Notice, Redemption, Reward, Task, Wallet, jarTier, rpc, sb, todayTW } from "../supabase";
 import { Today } from "./Today";
@@ -15,6 +16,7 @@ type Tab = (typeof TABS)[number][0];
 export function KidApp() {
   const { me, tick } = useStore(); const ui = useUi();
   const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "today");
+  useDailyBrief((t) => setTab(t as Tab));
   const [d, setD] = useState<Omit<KidData, "reload">>({ wallet: null, tasks: [], rewards: [], redemptions: [], ledger: [], notices: [] });
   const prev = useRef<{ spend: number; level: number; notice: number } | null>(null);
 

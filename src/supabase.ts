@@ -9,7 +9,7 @@ export interface Task {
   id: string; kind: "routine" | "proposal" | "errand"; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null;
   photo: "none" | "optional" | "required"; assignee: string; created_by: string | null; for_date: string | null; due_at: string | null;
   status: "todo" | "submitted" | "approved" | "rejected"; photo_path: string | null; reject_reason: string | null;
-  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null;
+  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null; ack_at?: string | null;
 }
 export interface Template { id: string; assignee: string; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null; days: number[]; photo: "none" | "optional" | "required"; active: boolean; sort: number }
 export interface Reward { id: string; title: string; emoji: string; cost: number; tier: "small" | "medium" | "large"; active: boolean }
@@ -48,4 +48,15 @@ export function when(iso: string) {
   const d = new Date(iso), diff = (Date.now() - d.getTime()) / 60000;
   if (diff < 1) return "剛剛"; if (diff < 60) return `${Math.floor(diff)} 分鐘前`; if (diff < 60 * 24) return `${Math.floor(diff / 60)} 小時前`;
   return d.toLocaleDateString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// 截止時間的口語說法：「今天 18:00」「明天 08:00」「已過期」
+export function dueText(iso: string) {
+  const d = new Date(iso), now = new Date();
+  const day = (x: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(x);
+  const hm = d.toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false });
+  if (d.getTime() < now.getTime()) return "已過期";
+  if (day(d) === day(now)) return `今天 ${hm}`;
+  if (day(d) === day(new Date(now.getTime() + 864e5))) return `明天 ${hm}`;
+  return d.toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric" }) + ` ${hm}`;
 }

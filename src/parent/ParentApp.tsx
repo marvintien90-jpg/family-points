@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store";
+import { useDailyBrief } from "../Brief";
 import { useTab, useUi } from "../ui/ui";
 import { Redemption, Task, Wallet, rpc, sb } from "../supabase";
 import { Queue } from "./Queue";
@@ -15,6 +16,7 @@ export interface ParentData { queue: Task[]; reds: Redemption[]; wallets: Record
 export function ParentApp() {
   const { me, members, tick } = useStore(); const ui = useUi();
   const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "queue");
+  useDailyBrief((t) => { if (me?.role !== "guest") setTab(t as Tab); });
   const [fab, setFab] = useState(false);
   const [d, setD] = useState<Omit<ParentData, "reload">>({ queue: [], reds: [], wallets: {} });
   const kids = members.filter((m) => m.role === "child");

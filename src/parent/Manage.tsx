@@ -18,7 +18,7 @@ export function Manage() {
   const editR = (r?: Reward) => ui.sheet(<RewardSheet r={r} onDone={() => { ui.sheet(null); refresh(); }} />);
 
   return <>
-    <h2 className="sec">例行任務<small>每天自動出現在孩子的清單</small></h2>
+    <h2 className="sec">例行任務<small>點一下可以修改或刪除</small></h2>
     {kids.length === 0 && <div className="card empty">先到「設定 → 家庭成員」新增孩子帳號，預設任務會自動建立。</div>}
     {([...Object.keys(PACKS), ""] as string[]).map((pk) => {
       const list = tpls.filter((t) => (t.pack ?? "") === pk); if (!list.length) return null;
@@ -28,12 +28,19 @@ export function Manage() {
     })}
     {kids.length > 0 && <button className="btn ghost" onClick={() => editT()}>＋ 新增例行任務</button>}
 
-    <h2 className="sec">獎勵商店<small>點擊可以修改</small></h2>
+    <h2 className="sec">獎勵商店<small>點一下可以修改或刪除</small></h2>
     {(["small", "medium", "large"] as const).map((tier) => { const list = rews.filter((r) => r.tier === tier); if (!list.length) return null;
       return <div className="card" key={tier}><div className="pack-head"><b>{TIER[tier].name}</b><small>{TIER[tier].hint}</small></div>
         {list.map((r) => <button className="rew" key={r.id} style={{ textAlign: "left", opacity: r.active ? 1 : 0.45 }} onClick={() => editR(r)}><span className="emo" style={{ width: 40, height: 40, fontSize: 22 }}>{r.emoji}</span><div className="mid"><b>{r.title}</b><small>{r.active ? "上架中" : "已下架"}</small></div><span className="cost">{r.cost}</span></button>)}</div>; })}
     <button className="btn ghost" onClick={() => editR()}>＋ 新增獎勵</button>
   </>;
+}
+
+function DeleteZone({ label, onDelete }: { label: string; onDelete: () => Promise<void> }) {
+  const [sure, setSure] = useState(false);
+  return <div className="danger-zone">{!sure ? <button className="btn line" onClick={() => setSure(true)}>🗑️ 刪除{label}</button> :
+    <><div className="warn">確定要刪除「{label}」嗎？刪除後無法復原，已經得到的點數和紀錄會保留。</div>
+      <div className="row"><button className="btn line" onClick={() => setSure(false)}>先不要</button><button className="btn bad" onClick={onDelete}>確定刪除</button></div></>}</div>;
 }
 
 function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
@@ -49,9 +56,10 @@ function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
     <div className="field">哪幾天<div className="days">{DAYS.map((d, i) => <button key={i} className={f.days.includes(i) ? "on" : ""} onClick={() => set({ days: f.days.includes(i) ? f.days.filter((x) => x !== i) : [...f.days, i].sort() })}>{d}</button>)}</div></div>
     <div className="field">照片<div className="row">{([["none", "不需要"], ["optional", "可附"], ["required", "必須"]] as const).map(([k, l]) => <button key={k} className={`chip ${f.photo === k ? "on" : ""}`} onClick={() => set({ photo: k })}>{l}</button>)}</div></div>
     <EmojiPick value={f.emoji} onChange={(e) => set({ emoji: e })} />
-    {t && <div className="set-row"><div>啟用<small>停用後明天起不再出現</small></div><button className={`switch ${f.active ? "on" : ""}`} role="switch" aria-checked={f.active} aria-label="啟用" onClick={() => set({ active: !f.active })} /></div>}
+    {t && <div className="set-row"><div>啟用<small>暫時不用可以先停用，不需要了就刪除</small></div><button className={`switch ${f.active ? "on" : ""}`} role="switch" aria-checked={f.active} aria-label="啟用" onClick={() => set({ active: !f.active })} /></div>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
       <button className="btn" disabled={!f.title.trim() || f.days.length === 0} onClick={async () => { const r = await ui.busy(rpc("save_template", { p: f })); if (r !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
+    {t && <DeleteZone label={t.title} onDelete={async () => { const r = await ui.busy(rpc("delete_template", { p_id: t.id })); if (r !== undefined) { ui.toast("已刪除"); onDone(); } }} />}
   </>;
 }
 
@@ -68,5 +76,6 @@ function RewardSheet({ r, onDone }: { r?: Reward; onDone: () => void }) {
     {r && <div className="set-row"><div>上架</div><button className={`switch ${f.active ? "on" : ""}`} role="switch" aria-checked={f.active} aria-label="上架" onClick={() => set({ active: !f.active })} /></div>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
       <button className="btn" disabled={!f.title.trim()} onClick={async () => { const x = await ui.busy(rpc("save_reward", { p: f })); if (x !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
+    {r && <DeleteZone label={r.title} onDelete={async () => { const x = await ui.busy(rpc("delete_reward", { p_id: r.id })); if (x !== undefined) { ui.toast("已刪除"); onDone(); } }} />}
   </>;
 }

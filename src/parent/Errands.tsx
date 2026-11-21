@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { Task, rpc, sb, when } from "../supabase";
+import { Task, dueText, rpc, sb, when } from "../supabase";
 
 export function Errands() {
   const { me, members, tick, refresh } = useStore(); const ui = useUi();
@@ -9,14 +9,15 @@ export function Errands() {
   useEffect(() => { sb.from("tasks").select("*").eq("kind", "errand").gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).then(({ data }) => setList((data ?? []) as Task[])); }, [tick]);
   const name = (id: string) => members.find((m) => m.id === id)?.display_name ?? "";
   const open = list.filter((t) => t.status !== "approved"), done = list.filter((t) => t.status === "approved");
-  const status = (t: Task) => (t.status === "submitted" ? "等你核准" : t.status === "rejected" ? "已退回" : "進行中");
+  const status = (t: Task) => (t.status === "submitted" ? "等你核准" : t.status === "rejected" ? "已退回" : t.ack_at ? "已收到" : "對方未讀");
+  const ack = async (t: Task) => { const r = await ui.busy(rpc("ack_errand", { p_task: t.id })); if (r !== undefined) { ui.toast("已確認收到"); refresh(); } };
   return <>
-    <h2 className="sec">家庭交辦<small>可以交辦給任何人，也包括爸媽</small></h2>
+    <h2 className="sec">家庭交辦<small>對方沒按「收到」，每 3 小時提醒一次</small></h2>
     <button className="btn" onClick={() => ui.sheet(<ErrandSheet />)}>＋ 新增交辦事項</button>
     {open.length === 0 && <div className="card empty">沒有進行中的交辦</div>}
     {open.map((t) => <div className="card" key={t.id}><div className="rew"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b>
-      <small>{name(t.assignee)}{t.due_at ? ` · 截止 ${new Date(t.due_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}{t.points ? ` · +${t.points}` : ""}</small></div>
-      {t.assignee === me?.id && t.status === "todo" ? <button className="btn sm" onClick={async () => { const r = await ui.busy(rpc("complete_own_errand", { p_task: t.id })); if (r !== undefined) { ui.toast("完成了"); refresh(); } }}>完成</button> : <span className={`tag ${t.status === "submitted" ? "gold" : ""}`}>{status(t)}</span>}</div></div>)}
+      <small>{name(t.assignee)}{t.due_at ? ` · ${dueText(t.due_at)}` : ""}{t.points ? ` · +${t.points}` : ""}</small></div>
+      {t.assignee === me?.id && t.status === "todo" ? (!t.ack_at ? <button className="btn sm ghost" onClick={() => ack(t)}>收到</button> : <button className="btn sm" onClick={async () => { const r = await ui.busy(rpc("complete_own_errand", { p_task: t.id })); if (r !== undefined) { ui.toast("完成了"); refresh(); } }}>完成</button>) : <span className={`tag ${t.status === "submitted" ? "gold" : t.status === "todo" && !t.ack_at ? "new" : t.ack_at && t.status === "todo" ? "ok" : ""}`}>{status(t)}</span>}</div></div>)}
     {done.length > 0 && <><h2 className="sec">已完成<small>最近 30 天</small></h2><div className="card ledger">{done.map((t) => <div className="l" key={t.id}><div>{t.emoji} {t.title}<small>{name(t.assignee)} · {when(t.decided_at ?? t.created_at)}</small></div><span className="plus">✓</span></div>)}</div></>}
   </>;
 }

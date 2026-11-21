@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Task, rpc, sb } from "../supabase";
+import { PACKS, Task, dueText, rpc, sb } from "../supabase";
 import type { KidData } from "./KidApp";
 
 async function shrink(file: File): Promise<Blob> {
@@ -53,8 +53,9 @@ export function Today({ data }: { data: KidData }) {
 
     <h2 className="sec">家裡交辦給我<small>{errands.length} 件</small></h2>
     {errands.length ? errands.map((t) => <div className="card" key={t.id}><div className="rew"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b>
-      <small>{t.status === "submitted" ? "⏳ 等待核准" : t.status === "rejected" ? `被退回：${t.reject_reason}` : t.due_at ? `截止 ${new Date(t.due_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "沒有截止時間"}{t.points ? ` · +${t.points}` : ""}</small></div>
-      {(t.status === "todo" || t.status === "rejected") && <button className="btn sm" onClick={() => submit([t.id])}>完成</button>}</div></div>)
+      <small>{t.status === "submitted" ? "⏳ 等待核准" : t.status === "rejected" ? `被退回：${t.reject_reason}` : t.due_at ? `截止 ${dueText(t.due_at)}` : "沒有截止時間"}{t.points ? ` · +${t.points}` : ""}</small></div>
+      {t.status === "todo" && !t.ack_at ? <button className="btn sm ghost" onClick={async () => { const r = await ui.busy(rpc("ack_errand", { p_task: t.id })); if (r !== undefined) { ui.toast("已告訴爸媽你收到了"); data.reload(); } }}>收到</button>
+        : (t.status === "todo" || t.status === "rejected") && <button className="btn sm" onClick={() => submit([t.id])}>完成</button>}</div></div>)
       : <div className="card empty">目前沒有交辦事項</div>}
 
     <h2 className="sec">主動任務<small>今天還能提案 {Math.max(0, limit - usedToday)} 次</small></h2>
