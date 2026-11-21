@@ -1,0 +1,90 @@
+import { useState } from "react";
+import { useStore } from "../store";
+import { useUi } from "../ui/ui";
+import { Member, Role, adminCall, rpc, sb } from "../supabase";
+import { enablePush, isIOS, isStandalone, pushPermission } from "../push";
+
+const ROLE: Record<Role, string> = { admin: "管理員家長", parent: "家長", child: "孩子", guest: "訪客" };
+const AVATARS = ["👨", "👩", "👦", "👧", "🧒", "🦊", "🐼", "🐯", "🐰", "🐻", "👴", "👵"];
+
+export function Settings() {
+  const { me, members, family, refresh } = useStore(); const ui = useUi();
+  const [perm, setPerm] = useState(pushPermission());
+  const isAdmin = me?.role === "admin";
+  return <>
+    <h2 className="sec">手機通知</h2>
+    <div className="card steps">
+      <div className={`step ${isStandalone() ? "done" : ""}`}><span className="dot">1</span>{isIOS() ? "在 Safari 按「分享 → 加入主畫面」" : "安裝到主畫面（建議）"}</div>
+      <div className={`step ${perm === "granted" ? "done" : ""}`}><span className="dot">2</span>從主畫面打開，按下方按鈕允許通知</div>
+      <div className="row">
+        <button className="btn sm" disabled={perm === "granted"} onClick={async () => { const r = await ui.busy(enablePush(me!.id).then(() => true)); setPerm(pushPermission()); if (r) ui.toast("通知已開啟"); }}>{perm === "granted" ? "通知已開啟" : "開啟通知"}</button>
+      </div>
+      {perm === "denied" && <div className="warn">通知被關掉了。請到 iPhone「設定 → 通知 → 點點樂」打開。</div>}
+    </div>
+
+    <h2 className="sec">家庭成員<small>{family?.name}</small></h2>
+    <div className="card">{members.map((m) => <div className="rew" key={m.id}><span className="emo" style={{ width: 40, height: 40, fontSize: 22 }}>{m.avatar}</span>
+      <div className="mid"><b>{m.display_name}{m.id === me?.id ? "（我）" : ""}</b><small>{ROLE[m.role]} · 帳號 {m.login_id}</small></div>
+      {isAdmin && m.id !== me?.id && <button className="btn line sm" onClick={() => ui.sheet(<MemberSheet m={m} />)}>管理</button>}</div>)}
+      {isAdmin && <button className="btn ghost" onClick={() => ui.sheet(<NewMemberSheet onDone={() => { ui.sheet(null); refresh(); }} />)}>＋ 新增成員</button>}
+    </div>
+
+    {isAdmin && <Rules />}
+
+    <h2 className="sec">我的資料</h2>
+    <div className="card"><button className="btn line" onClick={() => ui.sheet(<ProfileSheet />)}>修改稱呼和頭像</button><button className="btn line" onClick={() => sb.auth.signOut()}>登出</button></div>
+    <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 12 }}>家庭點點樂 v1.0 · 資料存在雲端，筆電關機也照常運作</p>
+  </>;
+}
+
+function Rules() {
+  const { family, refresh } = useStore(); const ui = useUi(); const s = family?.settings ?? {};
+  const [f, setF] = useState({ deposit_bonus: Number(s.deposit_bonus ?? 0.05) * 100, interest_rate: Number(s.interest_rate ?? 0.02) * 100, interest_cap: Number(s.interest_cap ?? 30), proposal_bonus: Number(s.proposal_bonus ?? 0.2) * 100, proposal_daily_limit: Number(s.proposal_daily_limit ?? 3), pack_bonus: Number(s.pack_bonus ?? 10), quiet_start: String(s.quiet_start ?? "21:30"), quiet_end: String(s.quiet_end ?? "07:00") });
+  const num = (k: keyof typeof f, label: string, unit: string) => <label className="field">{label}<input type="number" inputMode="numeric" id={`rule-${k}`} value={f[k] as number} onChange={(e) => setF({ ...f, [k]: +e.target.value })} /><small>{unit}</small></label>;
+  return <><h2 className="sec">點數規則<small>只有管理員能改</small></h2>
+    <div className="card">
+      {num("pack_bonus", "一組例行全部完成的全勤獎", "點")}
+      {num("proposal_bonus", "主動提案加成", "%")}
+      {num("proposal_daily_limit", "每天最多提案", "次")}
+      {num("deposit_bonus", "存入存錢罐立即獎勵", "%")}
+      {num("interest_rate", "存錢罐每週利息", "%")}
+      {num("interest_cap", "每週利息上限", "點")}
+      <div className="row"><label className="field" style={{ flex: 1 }}>孩子安靜時段開始<input type="text" id="q-start" value={f.quiet_start} onChange={(e) => setF({ ...f, quiet_start: e.target.value })} /></label><label className="field" style={{ flex: 1 }}>結束<input type="text" id="q-end" value={f.quiet_end} onChange={(e) => setF({ ...f, quiet_end: e.target.value })} /></label></div>
+      <button className="btn" onClick={async () => { const r = await ui.busy(rpc("save_settings", { p: { ...f, deposit_bonus: f.deposit_bonus / 100, interest_rate: f.interest_rate / 100, proposal_bonus: f.proposal_bonus / 100 } })); if (r !== undefined) { ui.toast("規則已更新"); refresh(); } }}>儲存規則</button>
+    </div></>;
+}
+
+function NewMemberSheet({ onDone }: { onDone: () => void }) {
+  const ui = useUi(); const [f, setF] = useState({ display_name: "", role: "child" as Role, login_id: "", password: "", avatar: "👦" }); const [busy, setBusy] = useState(false);
+  const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
+  return <>
+    <h3>新增家庭成員</h3><p>建立後把帳號密碼告訴對方，用它登入就好。第一個孩子加入時會自動建立預設任務和獎勵。</p>
+    <div className="row">{(["parent", "child", "guest"] as Role[]).map((r) => <button key={r} className={`chip ${f.role === r ? "on" : ""}`} onClick={() => set({ role: r })}>{ROLE[r]}</button>)}</div>
+    <label className="field">稱呼<input type="text" id="m-name" value={f.display_name} placeholder="例如：媽媽、小宇" onChange={(e) => set({ display_name: e.target.value })} /></label>
+    <label className="field">登入帳號（小寫英文或數字）<input type="text" id="m-login" autoCapitalize="none" value={f.login_id} onChange={(e) => set({ login_id: e.target.value.toLowerCase() })} /></label>
+    <label className="field">密碼（至少 6 個字）<input type="text" id="m-pw" autoCapitalize="none" value={f.password} onChange={(e) => set({ password: e.target.value })} /></label>
+    <div className="emoji-grid">{AVATARS.map((a) => <button key={a} className={f.avatar === a ? "on" : ""} onClick={() => set({ avatar: a })}>{a}</button>)}</div>
+    <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
+      <button className="btn" disabled={busy || !f.display_name || !f.login_id || f.password.length < 6} onClick={async () => { setBusy(true); const r = await ui.busy(adminCall({ action: "create_member", ...f })); setBusy(false); if (r) { ui.toast(`已建立 ${f.display_name} 的帳號`); onDone(); } }}>{busy ? "建立中…" : "建立"}</button></div>
+  </>;
+}
+
+function MemberSheet({ m }: { m: Member }) {
+  const { refresh } = useStore(); const ui = useUi(); const [pw, setPw] = useState(""); const [sure, setSure] = useState(false);
+  return <>
+    <h3>{m.avatar} {m.display_name}</h3><p>{ROLE[m.role]} · 帳號 {m.login_id}</p>
+    <label className="field">設定新密碼<input type="text" id="m-newpw" autoCapitalize="none" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+    <button className="btn" disabled={pw.length < 6} onClick={async () => { const r = await ui.busy(adminCall({ action: "reset_password", member_id: m.id, password: pw })); if (r) { ui.sheet(null); ui.toast("密碼已更新"); } }}>更新密碼</button>
+    {!sure ? <button className="btn line" onClick={() => setSure(true)}>移除這位成員</button> :
+      <><div className="warn">移除後，{m.display_name}的帳號、點數紀錄和任務會一起刪除，無法復原。</div>
+        <button className="btn bad" onClick={async () => { const r = await ui.busy(adminCall({ action: "remove_member", member_id: m.id })); if (r) { ui.sheet(null); ui.toast("已移除"); refresh(); } }}>確定移除</button></>}
+  </>;
+}
+
+function ProfileSheet() {
+  const { me, refresh } = useStore(); const ui = useUi(); const [name, setName] = useState(me?.display_name ?? ""); const [av, setAv] = useState(me?.avatar ?? "🙂");
+  return <><h3>我的資料</h3>
+    <label className="field">稱呼<input type="text" id="me-name" value={name} onChange={(e) => setName(e.target.value)} /></label>
+    <div className="emoji-grid">{AVATARS.map((a) => <button key={a} className={av === a ? "on" : ""} onClick={() => setAv(a)}>{a}</button>)}</div>
+    <button className="btn" onClick={async () => { const r = await ui.busy(rpc("update_profile", { p_name: name, p_avatar: av })); if (r !== undefined) { ui.sheet(null); refresh(); } }}>儲存</button></>;
+}

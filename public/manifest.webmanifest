@@ -1,0 +1,16 @@
+{
+  "name": "家庭點點樂",
+  "short_name": "點點樂",
+  "description": "家庭任務、點數與獎勵",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF2F5",
+  "theme_color": "#FF6B3D",
+  "lang": "zh-Hant-TW",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
