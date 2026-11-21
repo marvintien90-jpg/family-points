@@ -15,6 +15,10 @@ export default function App() {
     syncPush(me.id); clearBadge(); rpc("mark_notifications_read").catch(() => {});
   }, [me?.id]);
 
+  // 彈出視窗畫在 App 外面，所以把配色放在 body 上，彈窗按鈕才有顏色
+  const mode = me?.role === "child" ? "mode-kid" : "mode-parent";
+  useEffect(() => { document.body.classList.remove("mode-kid", "mode-parent"); document.body.classList.add(mode); }, [mode]);
+
   if (loading) return <div className="center-page"><div className="spinner" /></div>;
   if (isIOS() && !isStandalone() && !skipInstall) return <InstallGuide onSkip={() => setSkipInstall(true)} />;
   if (!session) return <Login />;

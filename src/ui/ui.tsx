@@ -1,14 +1,15 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const reduce = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function Sheet({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
-  return <><div className="scrim" onClick={onClose} /><div className="sheet" role="dialog" aria-modal="true"><div className="grab" />{children}</div></>;
+  return <><div className="scrim" onClick={onClose} /><div className="sheet" role="dialog" aria-modal="true"><div className="grab" /><button className="x" aria-label="關閉" onClick={onClose}>✕</button><ErrorBoundary small>{children}</ErrorBoundary></div></>;
 }
 export function Dialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
-  return <><div className="scrim" onClick={onClose} /><div className="dialog" role="alertdialog" aria-modal="true">{children}</div></>;
+  return <><div className="scrim" onClick={onClose} /><div className="dialog" role="alertdialog" aria-modal="true"><button className="x" aria-label="關閉" onClick={onClose}>✕</button><ErrorBoundary small>{children}</ErrorBoundary></div></>;
 }
 
 interface Ui {
@@ -29,6 +30,29 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [sheet, setSheet] = useState<ReactNode | null>(null);
   const [dialog, setDialog] = useState<ReactNode | null>(null);
   const tt = useRef<number>(), bt = useRef<number>();
+  // 開啟彈出視窗時多一筆瀏覽紀錄，讓 iPhone 返回手勢或瀏覽器上一頁可以關閉它
+  const hist = useRef({ pushed: false, skipping: false, wantPush: false });
+  const open = !!(sheet || dialog);
+  useEffect(() => {
+    const h = hist.current;
+    if (open) {
+      if (h.pushed) return;
+      if (h.skipping) { h.wantPush = true; return; }
+      history.pushState({ fpOverlay: 1 }, ""); h.pushed = true;
+    } else {
+      if (h.skipping) h.wantPush = false;
+      if (!h.pushed) return;
+      h.pushed = false; h.skipping = true; history.back();
+    }
+  }, [open]);
+  useEffect(() => {
+    const onPop = () => {
+      const h = hist.current;
+      if (h.skipping) { h.skipping = false; if (h.wantPush) { h.wantPush = false; history.pushState({ fpOverlay: 1 }, ""); h.pushed = true; } return; }
+      if (h.pushed) { h.pushed = false; setSheet(null); setDialog(null); }
+    };
+    addEventListener("popstate", onPop); return () => removeEventListener("popstate", onPop);
+  }, []);
   const api: Ui = {
     toast: useCallback((msg, undo) => { clearTimeout(tt.current); setToast({ msg, undo }); tt.current = window.setTimeout(() => setToast(null), undo ? 5000 : 2600); }, []),
     celebrate: useCallback((e, t, b) => { setCel({ e, t, b }); if (!reduce()) confetti({ particleCount: 140, spread: 80, origin: { y: 0.35 }, zIndex: 80 }); }, []),
@@ -44,6 +68,15 @@ export function UiProvider({ children }: { children: ReactNode }) {
     {ban && <div className="banner" role="status" onClick={() => setBan(null)}><img src="./icon-192.png" alt="" /><div><b>{ban.t}</b><span>{ban.b}</span></div></div>}
     {cel && <div className="celebrate" onClick={() => setCel(null)}><div className="box" onClick={(e) => e.stopPropagation()}><div className="big">{cel.e}</div><b>{cel.t}</b><p style={{ margin: 0, color: "var(--muted)" }}>{cel.b}</p><button className="btn" onClick={() => setCel(null)}>太棒了</button></div></div>}
   </Ctx.Provider>;
+}
+
+// 分頁切換也記在瀏覽紀錄裡，返回會回到上一個分頁
+export function useTab<T extends string>(valid: readonly T[], def: T): [T, (t: T) => void] {
+  const read = () => { const q = new URLSearchParams(location.search).get("tab") as T | null; return q && valid.includes(q) ? q : def; };
+  const [tab, setTab] = useState<T>(read);
+  useEffect(() => { const f = () => { if (!(history.state && history.state.fpOverlay)) setTab(read()); }; addEventListener("popstate", f); return () => removeEventListener("popstate", f); }, []); // eslint-disable-line
+  const go = useCallback((t: T) => { setTab((cur) => { if (cur !== t) history.pushState({ tab: t }, "", `?tab=${t}`); return t; }); document.querySelector(".screen")?.scrollTo(0, 0); }, []);
+  return [tab, go];
 }
 
 export function RollNumber({ value, id }: { value: number; id?: string }) {

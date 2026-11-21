@@ -4,7 +4,7 @@ import { EmojiPick, useUi } from "../ui/ui";
 import { Task, rpc, sb, when } from "../supabase";
 
 export function Errands() {
-  const { me, members, tick } = useStore(); const ui = useUi();
+  const { me, members, tick, refresh } = useStore(); const ui = useUi();
   const [list, setList] = useState<Task[]>([]);
   useEffect(() => { sb.from("tasks").select("*").eq("kind", "errand").gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).then(({ data }) => setList((data ?? []) as Task[])); }, [tick]);
   const name = (id: string) => members.find((m) => m.id === id)?.display_name ?? "";
@@ -16,7 +16,7 @@ export function Errands() {
     {open.length === 0 && <div className="card empty">沒有進行中的交辦</div>}
     {open.map((t) => <div className="card" key={t.id}><div className="rew"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b>
       <small>{name(t.assignee)}{t.due_at ? ` · 截止 ${new Date(t.due_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}{t.points ? ` · +${t.points}` : ""}</small></div>
-      {t.assignee === me?.id && t.status === "todo" ? <button className="btn sm" onClick={async () => { const r = await ui.busy(rpc("complete_own_errand", { p_task: t.id })); if (r !== undefined) ui.toast("完成了"); }}>完成</button> : <span className={`tag ${t.status === "submitted" ? "gold" : ""}`}>{status(t)}</span>}</div></div>)}
+      {t.assignee === me?.id && t.status === "todo" ? <button className="btn sm" onClick={async () => { const r = await ui.busy(rpc("complete_own_errand", { p_task: t.id })); if (r !== undefined) { ui.toast("完成了"); refresh(); } }}>完成</button> : <span className={`tag ${t.status === "submitted" ? "gold" : ""}`}>{status(t)}</span>}</div></div>)}
     {done.length > 0 && <><h2 className="sec">已完成<small>最近 30 天</small></h2><div className="card ledger">{done.map((t) => <div className="l" key={t.id}><div>{t.emoji} {t.title}<small>{name(t.assignee)} · {when(t.decided_at ?? t.created_at)}</small></div><span className="plus">✓</span></div>)}</div></>}
   </>;
 }

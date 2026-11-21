@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store";
-import { useUi } from "../ui/ui";
+import { useTab, useUi } from "../ui/ui";
 import { Redemption, Task, Wallet, rpc, sb } from "../supabase";
 import { Queue } from "./Queue";
 import { Manage } from "./Manage";
@@ -14,7 +14,7 @@ export interface ParentData { queue: Task[]; reds: Redemption[]; wallets: Record
 
 export function ParentApp() {
   const { me, members, tick } = useStore(); const ui = useUi();
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get("tab") as Tab) || "queue");
+  const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "queue");
   const [fab, setFab] = useState(false);
   const [d, setD] = useState<Omit<ParentData, "reload">>({ queue: [], reds: [], wallets: {} });
   const kids = members.filter((m) => m.role === "child");

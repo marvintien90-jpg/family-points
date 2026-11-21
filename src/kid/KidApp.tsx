@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
-import { useUi, RollNumber, floatPoints } from "../ui/ui";
+import { useUi, RollNumber, floatPoints, useTab } from "../ui/ui";
 import { Ledger, Notice, Redemption, Reward, Task, Wallet, jarTier, rpc, sb, todayTW } from "../supabase";
 import { Today } from "./Today";
 import { Shop } from "./Shop";
@@ -14,7 +14,7 @@ type Tab = (typeof TABS)[number][0];
 
 export function KidApp() {
   const { me, tick } = useStore(); const ui = useUi();
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get("tab") as Tab) || "today");
+  const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "today");
   const [d, setD] = useState<Omit<KidData, "reload">>({ wallet: null, tasks: [], rewards: [], redemptions: [], ledger: [], notices: [] });
   const prev = useRef<{ spend: number; level: number; notice: number } | null>(null);
 
@@ -57,7 +57,7 @@ export function KidApp() {
       {tab === "jar" && <Jar data={data} />}
       {tab === "me" && <Me data={data} />}
     </div>
-    <nav className="tabs">{TABS.map(([k, i, l]) => <button key={k} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => { setTab(k); document.querySelector(".screen")?.scrollTo(0, 0); }}><span className="ic">{i}</span>{l}</button>)}</nav>
+    <nav className="tabs">{TABS.map(([k, i, l]) => <button key={k} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}><span className="ic">{i}</span>{l}</button>)}</nav>
   </div>;
 }
 
