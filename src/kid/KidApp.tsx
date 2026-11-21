@@ -7,10 +7,11 @@ import { Today } from "./Today";
 import { Shop } from "./Shop";
 import { Jar } from "./Jar";
 import { Me } from "./Me";
+import { History } from "../History";
 
 export interface KidData { wallet: Wallet | null; tasks: Task[]; rewards: Reward[]; redemptions: Redemption[]; ledger: Ledger[]; notices: Notice[]; reload: () => Promise<void> }
 
-const TABS = [["today", "📋", "今天"], ["shop", "🎁", "商店"], ["jar", "🫙", "存錢罐"], ["me", "⭐", "我"]] as const;
+const TABS = [["today", "📋", "今天"], ["shop", "🎁", "商店"], ["jar", "🫙", "存錢罐"], ["history", "📖", "回顧"], ["me", "⭐", "我"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export function KidApp() {
@@ -53,10 +54,11 @@ export function KidApp() {
   const data: KidData = { ...d, reload };
   return <div className="app mode-kid">
     <div className="screen">
-      {tab !== "jar" && <Hero data={data} />}
+      {tab !== "jar" && tab !== "history" && <Hero data={data} />}
       {tab === "today" && <Today data={data} />}
       {tab === "shop" && <Shop data={data} goJar={() => setTab("jar")} />}
       {tab === "jar" && <Jar data={data} />}
+      {tab === "history" && <History />}
       {tab === "me" && <Me data={data} />}
     </div>
     <nav className="tabs">{TABS.map(([k, i, l]) => <button key={k} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}><span className="ic">{i}</span>{l}</button>)}</nav>

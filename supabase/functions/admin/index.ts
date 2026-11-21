@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     if (me.role !== "admin") return fail("只有管理員可以管理成員", 403);
 
     if (b.action === "create_member") {
-      if (!["parent", "child", "guest"].includes(b.role)) return fail("身份不正確");
+      if (!["admin", "parent", "child", "guest"].includes(b.role)) return fail("身份不正確");
       const uid = await makeUser(loginId, String(b.password ?? ""));
       const { error } = await admin.from("members").insert({ id: uid, family_id: me.family_id, display_name: String(b.display_name || loginId), role: b.role, avatar: b.avatar || "🙂", login_id: loginId });
       if (error) { await admin.auth.admin.deleteUser(uid); throw error; }
@@ -66,8 +66,23 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return ok({ done: true });
     }
+    if (b.action === "set_role") {
+      // 授權：成年成員可以在管理員、家長（操作者）、訪客之間切換；孩子身份不變
+      if (!["admin", "parent", "guest"].includes(b.role)) return fail("身份不正確");
+      if (target.role === "child") return fail("孩子的身份不能改成大人");
+      if (target.id === me.id && b.role !== "admin") {
+        const { count } = await admin.from("members").select("id", { count: "exact", head: true }).eq("family_id", me.family_id).eq("role", "admin");
+        if ((count ?? 0) <= 1) return fail("你是唯一的管理員，請先把別人設成管理員");
+      }
+      const { error } = await admin.from("members").update({ role: b.role }).eq("id", target.id);
+      if (error) throw error;
+      const label = { admin: "管理員", parent: "家長", guest: "訪客" }[b.role as "admin" | "parent" | "guest"];
+      await admin.from("notifications").insert({ family_id: me.family_id, member_id: target.id, title: "你的身份更新了", body: `${me.display_name}把你設為「${label}」`, url: "/" }).then(() => {}, () => {});
+      return ok({ done: true });
+    }
     if (b.action === "remove_member") {
       if (target.id === me.id) return fail("不能移除自己");
+      if (target.role === "admin") return fail("請先把對方改成家長，再移除");
       await admin.auth.admin.deleteUser(target.id);
       return ok({ done: true });
     }

@@ -68,7 +68,7 @@ export function Queue({ data }: { data: ParentData }) {
   </>;
 }
 
-function RejectSheet({ title, onSend }: { title: string; onSend: (why: string) => void }) {
+export function RejectSheet({ title, onSend }: { title: string; onSend: (why: string) => void }) {
   const ui = useUi(); const [why, setWhy] = useState("再做仔細一點"); const [other, setOther] = useState("");
   return <>
     <h3>退回：{title}</h3><p>寫一句原因，孩子會看到，修正後可以再送。</p>

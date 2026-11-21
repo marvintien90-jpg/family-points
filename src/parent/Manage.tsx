@@ -65,17 +65,18 @@ function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
 
 function RewardSheet({ r, onDone }: { r?: Reward; onDone: () => void }) {
   const ui = useUi();
-  const [f, setF] = useState({ id: r?.id ?? "", title: r?.title ?? "", emoji: r?.emoji ?? "🎁", cost: r?.cost ?? 100, tier: r?.tier ?? "small", active: r?.active ?? true });
+  const [f, setF] = useState({ id: r?.id ?? "", title: r?.title ?? "", emoji: r?.emoji ?? "🎁", cost: String(r?.cost ?? 100), tier: r?.tier ?? "small", active: r?.active ?? true });
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
   return <>
     <h3>{r ? "修改獎勵" : "新增獎勵"}</h3>
     <label className="field">獎勵名稱<input type="text" id="r-title" maxLength={30} value={f.title} onChange={(e) => set({ title: e.target.value })} /></label>
-    <label className="field">需要點數<input type="number" id="r-cost" min={1} max={100000} inputMode="numeric" value={f.cost} onChange={(e) => set({ cost: Math.max(1, +e.target.value || 1) })} /></label>
+    <label className="field">需要點數<input type="text" id="r-cost" inputMode="numeric" pattern="[0-9]*" maxLength={6} placeholder="例如 300" value={f.cost} onChange={(e) => set({ cost: e.target.value.replace(/\D/g, "").replace(/^0+/, "") })} /></label>
+    <div className="row">{[50, 100, 300, 500, 1000, 2000].map((n) => <button key={n} className={`chip ${f.cost === String(n) ? "on" : ""}`} onClick={() => set({ cost: String(n) })}>{n}</button>)}</div>
     <div className="field">等級<div className="row">{(["small", "medium", "large"] as const).map((k) => <button key={k} className={`chip ${f.tier === k ? "on" : ""}`} onClick={() => set({ tier: k })}>{TIER[k].name}</button>)}</div><small>{TIER[f.tier].hint}</small></div>
     <EmojiPick value={f.emoji} onChange={(e) => set({ emoji: e })} />
     {r && <div className="set-row"><div>上架</div><button className={`switch ${f.active ? "on" : ""}`} role="switch" aria-checked={f.active} aria-label="上架" onClick={() => set({ active: !f.active })} /></div>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!f.title.trim()} onClick={async () => { const x = await ui.busy(rpc("save_reward", { p: f })); if (x !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
+      <button className="btn" disabled={!f.title.trim() || !(Number(f.cost) >= 1)} onClick={async () => { const x = await ui.busy(rpc("save_reward", { p: { ...f, cost: Number(f.cost) } })); if (x !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
     {r && <DeleteZone label={r.title} onDelete={async () => { const x = await ui.busy(rpc("delete_reward", { p_id: r.id })); if (x !== undefined) { ui.toast("已刪除"); onDone(); } }} />}
   </>;
 }

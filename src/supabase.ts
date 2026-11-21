@@ -14,7 +14,7 @@ export interface Task {
 export interface Template { id: string; assignee: string; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null; days: number[]; photo: "none" | "optional" | "required"; active: boolean; sort: number }
 export interface Reward { id: string; title: string; emoji: string; cost: number; tier: "small" | "medium" | "large"; active: boolean }
 export interface Redemption { id: string; member_id: string; title: string; emoji: string; cost: number; source: "spend" | "jar"; status: "pending" | "approved" | "rejected"; reject_reason: string | null; created_at: string }
-export interface Ledger { id: number; member_id: string; account: "spend" | "jar"; amount: number; reason: string; created_at: string; created_by: string | null }
+export interface Ledger { id: number; member_id: string; account: "spend" | "jar"; amount: number; reason: string; created_at: string; created_by: string | null; ref_type?: string | null }
 export interface Wallet { member_id: string; spend: number; jar_raw: number; jar_value: number; best_days: number; lifetime: number; level: number; level_points: number; lots: { id: string; amount: number; days: number }[] }
 export interface Notice { id: number; title: string; body: string; url: string; created_at: string; read_at: string | null }
 

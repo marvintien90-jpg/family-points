@@ -4,7 +4,17 @@ import { useUi } from "../ui/ui";
 import { Member, Role, adminCall, rpc, sb } from "../supabase";
 import { enablePush, isIOS, isStandalone, pushPermission } from "../push";
 
-const ROLE: Record<Role, string> = { admin: "管理員家長", parent: "家長", child: "孩子", guest: "訪客" };
+const ROLE: Record<Role, string> = { admin: "管理員", parent: "家長（操作者）", child: "孩子", guest: "訪客" };
+const ROLE_CAN: Record<Role, string> = {
+  admin: "全部權限：核准任務、給點數、交辦、改任務和獎勵，還能管理成員帳號、授權身份、改點數規則",
+  parent: "日常操作：核准任務和兌換、給激勵點、交辦、修改任務和獎勵；不能管理成員和規則",
+  guest: "只能看，不能核准、給點數或修改任何東西（適合爺爺奶奶、保母）",
+  child: "完成任務、提案、存錢、兌換獎勵",
+};
+function RolePick({ value, onChange, roles }: { value: Role; onChange: (r: Role) => void; roles: Role[] }) {
+  return <div className="role-pick">{roles.map((r) => <button key={r} className={`role-opt ${value === r ? "on" : ""}`} onClick={() => onChange(r)} aria-pressed={value === r}>
+    <b>{r === "admin" ? "🛡️" : r === "parent" ? "🧑‍🔧" : r === "guest" ? "👀" : "🧒"} {ROLE[r]}</b><small>{ROLE_CAN[r]}</small></button>)}</div>;
+}
 const AVATARS = ["👨", "👩", "👦", "👧", "🧒", "🦊", "🐼", "🐯", "🐰", "🐻", "👴", "👵"];
 
 export function Settings() {
@@ -22,11 +32,12 @@ export function Settings() {
       {perm === "denied" && <div className="warn">通知被關掉了。請到 iPhone「設定 → 通知 → 點點樂」打開。</div>}
     </div>
 
-    <h2 className="sec">家庭成員<small>{family?.name}</small></h2>
+    <h2 className="sec">家庭成員與授權<small>{isAdmin ? "點「管理」可以改身份" : family?.name}</small></h2>
     <div className="card">{members.map((m) => <div className="rew" key={m.id}><span className="emo" style={{ width: 40, height: 40, fontSize: 22 }}>{m.avatar}</span>
-      <div className="mid"><b>{m.display_name}{m.id === me?.id ? "（我）" : ""}</b><small>{ROLE[m.role]} · 帳號 {m.login_id}</small></div>
+      <div className="mid"><b>{m.display_name}{m.id === me?.id ? "（我）" : ""}</b><small><span className={`tag role-${m.role}`}>{ROLE[m.role]}</span> 帳號 {m.login_id}</small></div>
       {isAdmin && m.id !== me?.id && <button className="btn line sm" onClick={() => ui.sheet(<MemberSheet m={m} />)}>管理</button>}</div>)}
       {isAdmin && <button className="btn ghost" onClick={() => ui.sheet(<NewMemberSheet onDone={() => { ui.sheet(null); refresh(); }} />)}>＋ 新增成員</button>}
+      <button className="link" onClick={() => ui.sheet(<><h3>各身份可以做什麼</h3>{(["admin", "parent", "guest", "child"] as Role[]).map((r) => <div className="card" key={r}><b>{ROLE[r]}</b><p>{ROLE_CAN[r]}</p></div>)}</>)}>各身份可以做什麼？</button>
     </div>
 
     {isAdmin && <Rules />}
@@ -40,7 +51,7 @@ export function Settings() {
 function Rules() {
   const { family, refresh } = useStore(); const ui = useUi(); const s = family?.settings ?? {};
   const [f, setF] = useState({ deposit_bonus: Number(s.deposit_bonus ?? 0.05) * 100, interest_rate: Number(s.interest_rate ?? 0.02) * 100, interest_cap: Number(s.interest_cap ?? 30), proposal_bonus: Number(s.proposal_bonus ?? 0.2) * 100, proposal_daily_limit: Number(s.proposal_daily_limit ?? 3), pack_bonus: Number(s.pack_bonus ?? 10), quiet_start: String(s.quiet_start ?? "21:30"), quiet_end: String(s.quiet_end ?? "07:00") });
-  const num = (k: keyof typeof f, label: string, unit: string) => <label className="field">{label}<input type="number" inputMode="numeric" id={`rule-${k}`} value={f[k] as number} onChange={(e) => setF({ ...f, [k]: +e.target.value })} /><small>{unit}</small></label>;
+  const num = (k: keyof typeof f, label: string, unit: string) => <label className="field">{label}<input type="text" inputMode="decimal" id={`rule-${k}`} value={String(f[k])} onChange={(e) => setF({ ...f, [k]: e.target.value.replace(/[^\d.]/g, "") as unknown as number })} /><small>{unit}</small></label>;
   return <><h2 className="sec">點數規則<small>只有管理員能改</small></h2>
     <div className="card">
       {num("pack_bonus", "一組例行全部完成的全勤獎", "點")}
@@ -50,7 +61,7 @@ function Rules() {
       {num("interest_rate", "存錢罐每週利息", "%")}
       {num("interest_cap", "每週利息上限", "點")}
       <div className="row"><label className="field" style={{ flex: 1 }}>孩子安靜時段開始<input type="text" id="q-start" value={f.quiet_start} onChange={(e) => setF({ ...f, quiet_start: e.target.value })} /></label><label className="field" style={{ flex: 1 }}>結束<input type="text" id="q-end" value={f.quiet_end} onChange={(e) => setF({ ...f, quiet_end: e.target.value })} /></label></div>
-      <button className="btn" onClick={async () => { const r = await ui.busy(rpc("save_settings", { p: { ...f, deposit_bonus: f.deposit_bonus / 100, interest_rate: f.interest_rate / 100, proposal_bonus: f.proposal_bonus / 100 } })); if (r !== undefined) { ui.toast("規則已更新"); refresh(); } }}>儲存規則</button>
+      <button className="btn" onClick={async () => { const r = await ui.busy(rpc("save_settings", { p: { ...f, pack_bonus: Number(f.pack_bonus) || 0, interest_cap: Number(f.interest_cap) || 0, proposal_daily_limit: Number(f.proposal_daily_limit) || 0, deposit_bonus: (Number(f.deposit_bonus) || 0) / 100, interest_rate: (Number(f.interest_rate) || 0) / 100, proposal_bonus: (Number(f.proposal_bonus) || 0) / 100 } })); if (r !== undefined) { ui.toast("規則已更新"); refresh(); } }}>儲存規則</button>
     </div></>;
 }
 
@@ -59,7 +70,7 @@ function NewMemberSheet({ onDone }: { onDone: () => void }) {
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
   return <>
     <h3>新增家庭成員</h3><p>建立後把帳號密碼告訴對方，用它登入就好。第一個孩子加入時會自動建立預設任務和獎勵。</p>
-    <div className="row">{(["parent", "child", "guest"] as Role[]).map((r) => <button key={r} className={`chip ${f.role === r ? "on" : ""}`} onClick={() => set({ role: r })}>{ROLE[r]}</button>)}</div>
+    <RolePick value={f.role} onChange={(r) => set({ role: r })} roles={["child", "parent", "admin", "guest"]} />
     <label className="field">稱呼<input type="text" id="m-name" value={f.display_name} placeholder="例如：媽媽、小宇" onChange={(e) => set({ display_name: e.target.value })} /></label>
     <label className="field">登入帳號（小寫英文或數字）<input type="text" id="m-login" autoCapitalize="none" value={f.login_id} onChange={(e) => set({ login_id: e.target.value.toLowerCase() })} /></label>
     <label className="field">密碼（至少 6 個字）<input type="text" id="m-pw" autoCapitalize="none" value={f.password} onChange={(e) => set({ password: e.target.value })} /></label>
@@ -71,8 +82,11 @@ function NewMemberSheet({ onDone }: { onDone: () => void }) {
 
 function MemberSheet({ m }: { m: Member }) {
   const { refresh } = useStore(); const ui = useUi(); const [pw, setPw] = useState(""); const [sure, setSure] = useState(false);
+  const [role, setRole] = useState<Role>(m.role);
   return <>
     <h3>{m.avatar} {m.display_name}</h3><p>{ROLE[m.role]} · 帳號 {m.login_id}</p>
+    {m.role !== "child" && <div className="field">授權身份<RolePick value={role} onChange={setRole} roles={["admin", "parent", "guest"]} />
+      <button className="btn" disabled={role === m.role} onClick={async () => { const r = await ui.busy(adminCall({ action: "set_role", member_id: m.id, role })); if (r) { ui.sheet(null); ui.toast(`已把${m.display_name}設為${ROLE[role]}`); refresh(); } }}>{role === m.role ? "目前身份" : `改成${ROLE[role]}`}</button></div>}
     <label className="field">設定新密碼<input type="text" id="m-newpw" autoCapitalize="none" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
     <button className="btn" disabled={pw.length < 6} onClick={async () => { const r = await ui.busy(adminCall({ action: "reset_password", member_id: m.id, password: pw })); if (r) { ui.sheet(null); ui.toast("密碼已更新"); } }}>更新密碼</button>
     {!sure ? <button className="btn line" onClick={() => setSure(true)}>移除這位成員</button> :

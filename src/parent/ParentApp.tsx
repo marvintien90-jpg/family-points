@@ -7,8 +7,9 @@ import { Queue } from "./Queue";
 import { Manage } from "./Manage";
 import { Errands, ErrandSheet } from "./Errands";
 import { Settings } from "./Settings";
+import { History } from "../History";
 
-const TABS = [["queue", "✅", "待辦"], ["manage", "🗂️", "任務獎勵"], ["errands", "📌", "交辦"], ["settings", "⚙️", "設定"]] as const;
+const TABS = [["queue", "✅", "待辦"], ["errands", "📌", "交辦"], ["history", "📖", "回顧"], ["manage", "🗂️", "任務獎勵"], ["settings", "⚙️", "設定"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export interface ParentData { queue: Task[]; reds: Redemption[]; wallets: Record<string, Wallet>; reload: () => Promise<void> }
@@ -45,6 +46,7 @@ export function ParentApp() {
       {tab === "queue" && <Queue data={data} />}
       {tab === "manage" && <Manage />}
       {tab === "errands" && <Errands />}
+      {tab === "history" && <History />}
       {tab === "settings" && <Settings />}
     </div>
     {fab && <div className="fab-menu">
