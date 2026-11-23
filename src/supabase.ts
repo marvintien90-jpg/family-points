@@ -8,13 +8,14 @@ export interface Family { id: string; name: string; settings: Record<string, num
 export interface Task {
   id: string; kind: "routine" | "proposal" | "errand"; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null;
   photo: "none" | "optional" | "required"; assignee: string; created_by: string | null; for_date: string | null; due_at: string | null;
-  status: "todo" | "submitted" | "approved" | "rejected"; photo_path: string | null; reject_reason: string | null;
-  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null; ack_at?: string | null;
+  status: "todo" | "submitted" | "approved" | "rejected" | "void"; photo_path: string | null; reject_reason: string | null;
+  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null; ack_at?: string | null; plan?: Plan | null;
 }
-export interface Template { id: string; assignee: string; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null; days: number[]; photo: "none" | "optional" | "required"; active: boolean; sort: number }
+export interface Plan { days?: number[]; dates?: string[]; at_time?: string | null; pack?: string | null }
+export interface Template { id: string; assignee: string; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null; days: number[]; dates?: string[]; at_time?: string | null; photo: "none" | "optional" | "required"; active: boolean; sort: number }
 export interface Reward { id: string; title: string; emoji: string; cost: number; tier: "small" | "medium" | "large"; active: boolean }
 export interface Redemption { id: string; member_id: string; title: string; emoji: string; cost: number; source: "spend" | "jar"; status: "pending" | "approved" | "rejected"; reject_reason: string | null; created_at: string }
-export interface Ledger { id: number; member_id: string; account: "spend" | "jar"; amount: number; reason: string; created_at: string; created_by: string | null; ref_type?: string | null }
+export interface Ledger { id: number; member_id: string; account: "spend" | "jar"; amount: number; reason: string; created_at: string; created_by: string | null; ref_type?: string | null; ref_id?: string | null; ref_ledger?: number | null }
 export interface Wallet { member_id: string; spend: number; jar_raw: number; jar_value: number; best_days: number; lifetime: number; level: number; level_points: number; lots: { id: string; amount: number; days: number }[] }
 export interface Notice { id: number; title: string; body: string; url: string; created_at: string; read_at: string | null }
 
@@ -60,3 +61,13 @@ export function dueText(iso: string) {
   if (day(d) === day(new Date(now.getTime() + 864e5))) return `明天 ${hm}`;
   return d.toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric" }) + ` ${hm}`;
 }
+
+// 排程的口語說法：「每天 07:30」「一三五」「12/25、1/1」
+export const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
+export const hm = (t?: string | null) => (t ? t.slice(0, 5) : "");
+export function scheduleText(p: { days?: number[]; dates?: string[]; at_time?: string | null }) {
+  const ds = p.dates ?? [];
+  const when = ds.length ? ds.slice().sort().map((d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`).join("、") : (p.days ?? []).length === 7 ? "每天" : (p.days ?? []).length === 0 ? "未設定" : "每週" + (p.days ?? []).map((d) => WEEK[d]).join("");
+  return when + (p.at_time ? ` ${hm(p.at_time)}` : "");
+}
+export const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }) : "");

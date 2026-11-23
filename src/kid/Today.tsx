@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Task, dueText, rpc, sb } from "../supabase";
+import { PACKS, Task, dueText, rpc, sb, scheduleText, timeOf } from "../supabase";
+import { SchedulePick, Sched } from "../ui/Schedule";
 import type { KidData } from "./KidApp";
 
 async function shrink(file: File): Promise<Blob> {
@@ -14,7 +15,7 @@ async function shrink(file: File): Promise<Blob> {
 export function Today({ data }: { data: KidData }) {
   const { me, family } = useStore(); const ui = useUi();
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const routines = data.tasks.filter((t) => t.kind === "routine");
+  const routines = data.tasks.filter((t) => t.kind === "routine").sort((a, b) => (a.due_at ?? "9").localeCompare(b.due_at ?? "9"));
   const errands = data.tasks.filter((t) => t.kind === "errand" && t.status !== "approved");
   const proposals = data.tasks.filter((t) => t.kind === "proposal");
   const limit = Number(family?.settings.proposal_daily_limit ?? 3);
@@ -61,8 +62,8 @@ export function Today({ data }: { data: KidData }) {
     <h2 className="sec">主動任務<small>今天還能提案 {Math.max(0, limit - usedToday)} 次</small></h2>
     <div className="card">
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "var(--muted)" }}>自己想到可以幫忙或挑戰的事？提案給爸媽，核准後多 <b style={{ color: "var(--gold)" }}>{Math.round(Number(family?.settings.proposal_bonus ?? 0.2) * 100)}%</b> 主動加成。</p>
-      {proposals.slice(-3).reverse().map((t) => <div className="lot" key={t.id}><span>{t.emoji} {t.title}</span><span className={`tag ${t.status === "approved" ? "gold" : t.status === "rejected" ? "bad" : ""}`}>{t.status === "approved" ? "已核准" : t.status === "rejected" ? `退回：${t.reject_reason}` : "等待中"}</span></div>)}
-      <button className="btn ghost" disabled={usedToday >= limit} onClick={() => ui.sheet(<ProposeSheet onDone={() => { ui.sheet(null); data.reload(); }} />)}>＋ 提案一個主動任務</button>
+      {proposals.slice(-3).reverse().map((t) => <div className="lot" key={t.id}><span>{t.emoji} {t.title}{t.plan && <small className="hint"> · 例行 {scheduleText(t.plan)}</small>}</span><span className={`tag ${t.status === "approved" ? "gold" : t.status === "rejected" ? "bad" : ""}`}>{t.status === "approved" ? (t.plan ? "已加入例行" : "已核准") : t.status === "rejected" ? `退回：${t.reject_reason}` : "等待中"}</span></div>)}
+      <button className="btn ghost" disabled={usedToday >= limit} onClick={() => ui.sheet(<ProposeSheet onDone={() => { ui.sheet(null); data.reload(); }} />)}>＋ 提案（一次性或每日例行）</button>
     </div>
     {me && null}
   </>;
@@ -72,7 +73,7 @@ function TaskRow({ t, picked, onClick }: { t: Task; picked: boolean; onClick: ()
   const cls = t.status === "approved" ? "ok" : t.status === "submitted" ? "sub" : picked ? "done" : "";
   return <button className={`item ${cls}`} onClick={onClick} aria-pressed={picked} aria-disabled={t.status === "submitted" || t.status === "approved"}>
     <span className="chk" /><span className="emo">{t.emoji}</span>
-    <span className="t">{t.title}{t.status === "submitted" && <small>等待核准</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
+    <span className="t">{t.title}{t.due_at && <span className="when-tag">⏰ {timeOf(t.due_at)}</span>}{t.status === "submitted" && <small>等待核准</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
     <span className="p">+{t.points}</span>
   </button>;
 }
@@ -99,12 +100,24 @@ function PhotoSheet({ required, onDone }: { required: boolean; onDone: (path: st
 
 function ProposeSheet({ onDone }: { onDone: () => void }) {
   const ui = useUi(); const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("🌱"); const [pts, setPts] = useState(30);
+  const [kind, setKind] = useState<"once" | "routine">("once");
+  const [plan, setPlan] = useState<Sched & { pack: string }>({ days: [0, 1, 2, 3, 4, 5, 6], dates: [], at_time: "", pack: "pm" });
+  const routine = kind === "routine";
+  const switchKind = (k: "once" | "routine") => { setKind(k); setPts(k === "routine" ? 5 : 30); };
   return <>
-    <h3>提案主動任務</h3><p>說說你想做什麼、建議幾點。爸媽可能會調整點數。</p>
-    <label className="field">要做什麼<input type="text" id="p-title" maxLength={30} placeholder="例如：幫忙洗碗一週" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+    <h3>提案給爸媽</h3><p>{routine ? "想每天（或固定幾天）做的好習慣，爸媽核准後會加進你的例行清單。" : "說說你想做什麼、建議幾點。爸媽可能會調整點數。"}</p>
+    <div className="seg"><button className={!routine ? "on" : ""} onClick={() => switchKind("once")}>一次性任務</button><button className={routine ? "on" : ""} onClick={() => switchKind("routine")}>每日例行</button></div>
+    <label className="field">要做什麼<input type="text" id="p-title" maxLength={30} placeholder={routine ? "例如：每天練琴 20 分鐘" : "例如：幫忙洗碗一週"} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     <EmojiPick value={emoji} onChange={setEmoji} />
-    <label className="field">建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={5} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
+    {routine ? <>
+      <label className="field">每次建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={1} max={30} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
+      <div className="field">時段<div className="row">{Object.entries(PACKS).map(([k, p]) => <button key={k} className={`chip ${plan.pack === k ? "on" : ""}`} onClick={() => setPlan({ ...plan, pack: k })}>{p.icon} {p.name}</button>)}</div></div>
+      <SchedulePick idp="p" value={plan} onChange={(v) => setPlan({ ...plan, ...v })} />
+    </> : <label className="field">建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={5} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!title.trim()} onClick={async () => { const r = await ui.busy(rpc("propose_task", { p_title: title, p_emoji: emoji, p_points: pts })); if (r !== undefined) { ui.toast("提案送出了！"); onDone(); } }}>送出提案</button></div>
+      <button className="btn" disabled={!title.trim() || (routine && plan.days.length === 0 && plan.dates.length === 0)} onClick={async () => {
+        const p_plan = routine ? { days: plan.dates.length ? [] : plan.days, dates: plan.dates, at_time: plan.at_time || null, pack: plan.pack } : null;
+        const r = await ui.busy(rpc("propose_task", { p_title: title, p_emoji: emoji, p_points: pts, p_plan }));
+        if (r !== undefined) { ui.toast(routine ? "已送出，等爸媽審核" : "提案送出了！"); onDone(); } }}>送出提案</button></div>
   </>;
 }

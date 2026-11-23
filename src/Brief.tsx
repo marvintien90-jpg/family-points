@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "./store";
 import { useUi } from "./ui/ui";
-import { PACKS, Task, dueText, rpc, sb, todayTW } from "./supabase";
+import { PACKS, Task, dueText, rpc, sb, timeOf, todayTW } from "./supabase";
 
 // 打開 App 時先跳出今日待辦，以及最近要到期的交辦
 export function useDailyBrief(goTab: (t: string) => void) {
@@ -28,13 +28,13 @@ function BriefSheet({ goTab }: { goTab: (t: string) => void }) {
     if (!me) return;
     if (kid) await rpc("ensure_today").catch(() => {});
     const [r, e, q, x] = await Promise.all([
-      sb.from("tasks").select("*").eq("assignee", me.id).eq("kind", "routine").eq("for_date", todayTW()).order("created_at"),
-      sb.from("tasks").select("*").eq("kind", "errand").neq("status", "approved").order("due_at", { ascending: true, nullsFirst: false }),
+      sb.from("tasks").select("*").eq("assignee", me.id).eq("kind", "routine").neq("status", "void").eq("for_date", todayTW()).order("created_at"),
+      sb.from("tasks").select("*").eq("kind", "errand").not("status", "in", "(approved,void)").order("due_at", { ascending: true, nullsFirst: false }),
       kid ? Promise.resolve({ count: 0 }) : sb.from("tasks").select("id", { count: "exact", head: true }).eq("status", "submitted"),
       kid ? Promise.resolve({ count: 0 }) : sb.from("redemptions").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
     const all = (e.data ?? []) as Task[];
-    setD({ routines: ((r.data ?? []) as Task[]).filter((t) => t.status === "todo" || t.status === "rejected"), errands: all.filter((t) => t.assignee === me.id), family: all, approvals: q.count ?? 0, reds: x.count ?? 0 });
+    setD({ routines: ((r.data ?? []) as Task[]).filter((t) => t.status === "todo" || t.status === "rejected").sort((a, b) => (a.due_at ?? "9").localeCompare(b.due_at ?? "9")), errands: all.filter((t) => t.assignee === me.id), family: all, approvals: q.count ?? 0, reds: x.count ?? 0 });
   };
   useEffect(() => { load(); }, []); // eslint-disable-line
   if (!d || !me) return <div className="spinner" />;
@@ -57,7 +57,7 @@ function BriefSheet({ goTab }: { goTab: (t: string) => void }) {
     </div>
     {next && <div className="next"><span className="emo">{next.emoji}</span><div style={{ flex: 1, minWidth: 0 }}><small>最近要到期</small><b>{next.title}</b><small>{next.assignee === me.id ? "交辦給你" : `交辦給${name(next.assignee)}`}{next.ack_at ? "" : " · 還沒確認"}</small></div><span className="when">{dueText(next.due_at!)}</span></div>}
     {unread.length > 0 && <div className="card"><b style={{ fontSize: 14 }}>📬 新的交辦，請按「收到」</b><div className="brief-list">{unread.map((t) => <div className="li" key={t.id}><span>{t.emoji}</span><div className="grow">{t.title}<small>{t.created_by ? `${name(t.created_by)}交辦` : ""}{t.due_at ? ` · ${dueText(t.due_at)}` : ""}</small></div><button className="btn sm ghost" onClick={() => ack(t)}>收到</button></div>)}</div></div>}
-    {kid && d.routines.length > 0 && <div className="card"><b style={{ fontSize: 14 }}>📋 今天還要做</b><div className="brief-list">{d.routines.slice(0, 6).map((t) => <div className="li" key={t.id}><span>{t.emoji}</span><div className="grow">{t.title}<small>{t.pack ? PACKS[t.pack].name + " · " + PACKS[t.pack].time : ""}{t.status === "rejected" ? " · 被退回，再試一次" : ""}</small></div><span className="cost" style={{ fontSize: 14 }}>+{t.points}</span></div>)}
+    {kid && d.routines.length > 0 && <div className="card"><b style={{ fontSize: 14 }}>📋 今天還要做</b><div className="brief-list">{d.routines.slice(0, 6).map((t) => <div className="li" key={t.id}><span>{t.emoji}</span><div className="grow">{t.title}<small>{t.due_at ? "⏰ " + timeOf(t.due_at) : t.pack ? PACKS[t.pack].name + " · " + PACKS[t.pack].time : ""}{t.status === "rejected" ? " · 被退回，再試一次" : ""}</small></div><span className="cost" style={{ fontSize: 14 }}>+{t.points}</span></div>)}
       {d.routines.length > 6 && <div className="li"><small>還有 {d.routines.length - 6} 項</small></div>}</div></div>}
     {!kid && d.errands.filter((t) => t.ack_at && t.status === "todo").length > 0 && <div className="card"><b style={{ fontSize: 14 }}>📌 交辦給你的事</b><div className="brief-list">{d.errands.filter((t) => t.ack_at && t.status === "todo").map((t) => <div className="li" key={t.id}><span>{t.emoji}</span><div className="grow">{t.title}<small>{t.due_at ? dueText(t.due_at) : "沒有截止時間"}</small></div></div>)}</div></div>}
     {nothing && <div className="empty"><span className="big">🌤️</span>今天目前沒有待辦，好好休息。</div>}

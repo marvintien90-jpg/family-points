@@ -123,7 +123,7 @@ h2.sec small{font-weight:500;color:var(--muted);font-size:12px;text-align:right}
 .sheet h3,.dialog h3{margin:0;font-size:18px;font-weight:900}
 .sheet p,.dialog p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
 .field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-.field input[type=text],.field input[type=password],.field input[type=number],.field input[type=datetime-local],.field select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface-2);border:1.5px solid var(--line);border-radius:12px;padding:12px;width:100%}
+.field input[type=text],.field input[type=password],.field input[type=number],.field input[type=datetime-local],.field input[type=date],.field input[type=time],.field select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface-2);border:1.5px solid var(--line);border-radius:12px;padding:12px;width:100%}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .dialog{position:fixed;left:50%;top:50%;width:calc(100% - 48px);max-width:400px;transform:translate(-50%,-50%);background:var(--surface);border-radius:22px;padding:20px;z-index:41;display:flex;flex-direction:column;gap:12px;animation:popin .22s ease}
 @keyframes popin{from{opacity:0;transform:translate(-50%,-45%) scale(.95)}}

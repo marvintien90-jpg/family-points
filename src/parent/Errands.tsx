@@ -4,12 +4,13 @@ import { EmojiPick, useUi } from "../ui/ui";
 import { SwipeAction, SwipeRow } from "../ui/Swipe";
 import { Task, dueText, rpc, sb, when } from "../supabase";
 import { RejectSheet } from "./Queue";
+import { DuePick, twDefault, twToIso } from "../ui/Schedule";
 
 export function Errands() {
   const { me, members, tick, refresh } = useStore(); const ui = useUi();
   const [list, setList] = useState<Task[]>([]);
   const [filter, setFilter] = useState<"open" | "done">("open");
-  const load = () => sb.from("tasks").select("*").eq("kind", "errand").gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString()).order("created_at", { ascending: false }).then(({ data }) => setList((data ?? []) as Task[]));
+  const load = () => sb.from("tasks").select("*").eq("kind", "errand").neq("status", "void").gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString()).order("created_at", { ascending: false }).then(({ data }) => setList((data ?? []) as Task[]));
   useEffect(() => { load(); }, [tick]); // eslint-disable-line
   const name = (id: string) => members.find((m) => m.id === id)?.display_name ?? "";
   const avatar = (id: string) => members.find((m) => m.id === id)?.avatar ?? "🙂";
@@ -76,19 +77,17 @@ function ReopenSheet({ t, onDone }: { t: Task; onDone: () => void }) {
 export function ErrandSheet() {
   const { members, refresh } = useStore(); const ui = useUi();
   const people = members.filter((m) => m.role !== "guest");
-  const tomorrow = new Date(Date.now() + 864e5); tomorrow.setHours(20, 0, 0, 0);
-  const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("📌"); const [who, setWho] = useState(people.find((m) => m.role === "child")?.id ?? people[0]?.id);
-  const [due, setDue] = useState(local(tomorrow)); const [pts, setPts] = useState(10);
+  const [due, setDue] = useState(twDefault(1, "20:00")); const [pts, setPts] = useState(10);
   const isKid = members.find((m) => m.id === who)?.role === "child";
   return <>
     <h3>交辦家庭事項</h3>
     <label className="field">事項<input type="text" id="e-title" maxLength={40} placeholder="例如：週六前繳午餐費" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     <div className="row">{people.map((m) => <button key={m.id} className={`chip ${who === m.id ? "on" : ""}`} onClick={() => setWho(m.id)}>{m.avatar} {m.display_name}</button>)}</div>
-    <label className="field">截止時間（前一小時自動提醒）<input type="datetime-local" id="e-due" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+    <DuePick value={due} onChange={setDue} />
     {isKid && <label className="field">完成可得點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" min={0} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>}
     <EmojiPick value={emoji} onChange={setEmoji} />
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!title.trim()} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: due ? new Date(due).toISOString() : null, p_points: isKid ? pts : 0 })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
+      <button className="btn" disabled={!title.trim()} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: twToIso(due), p_points: isKid ? pts : 0 })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
   </>;
 }

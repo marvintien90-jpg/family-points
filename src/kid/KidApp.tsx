@@ -27,7 +27,7 @@ export function KidApp() {
     const since = new Date(Date.now() - 7 * 864e5).toISOString();
     const [wallet, tasks, rewards, reds, ledger, notices] = await Promise.all([
       rpc<Wallet>("get_wallet"),
-      sb.from("tasks").select("*").eq("assignee", me.id).or(`for_date.eq.${todayTW()},and(kind.neq.routine,created_at.gte.${since})`).order("created_at"),
+      sb.from("tasks").select("*").eq("assignee", me.id).neq("status", "void").or(`for_date.eq.${todayTW()},and(kind.neq.routine,created_at.gte.${since})`).order("created_at"),
       sb.from("rewards").select("*").eq("active", true).order("cost"),
       sb.from("redemptions").select("*").eq("member_id", me.id).order("created_at", { ascending: false }).limit(20),
       sb.from("ledger").select("*").eq("member_id", me.id).order("created_at", { ascending: false }).limit(40),

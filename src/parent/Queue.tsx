@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { useUi } from "../ui/ui";
-import { Redemption, Task, jarTier, rpc, sb, when } from "../supabase";
+import { Redemption, Task, jarTier, rpc, sb, when, scheduleText, PACKS } from "../supabase";
 import type { ParentData } from "./ParentApp";
 import { BonusSheet } from "./ParentApp";
 
@@ -21,6 +21,7 @@ export function Queue({ data }: { data: ParentData }) {
   async function approve(t: Task) {
     const r = await ui.busy(rpc<number>("decide_task", { p_task: t.id, p_approve: true, p_points: adj[t.id] ?? null }));
     if (r === undefined) return;
+    if (t.plan) { ui.toast("已加入例行任務，可到「任務獎勵」修改"); data.reload(); return; }
     ui.toast(`已核准 +${r}`, async () => { await ui.busy(rpc("undo_task", { p_task: t.id })); ui.toast("已復原"); data.reload(); });
     data.reload();
   }
@@ -54,11 +55,13 @@ export function Queue({ data }: { data: ParentData }) {
       {list.length > 1 && <button className="btn good" onClick={() => approveAll(list)}>全部核准</button>}
     </div>)}
     {others.map((t) => <div className="card" key={t.id}>
-      <div className="q-top"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b><small>{name(t.assignee)} · {t.kind === "proposal" ? "主動提案" : "交辦"} · {when(t.submitted_at ?? t.created_at)}</small></div>
-        <span className="cost">+{t.kind === "proposal" ? Math.round((adj[t.id] ?? t.points) * (1 + bonusPct)) : adj[t.id] ?? t.points}</span></div>
-      {t.kind === "proposal" && <label className="field">核准點數 {adj[t.id] ?? t.points}（另加主動加成 {Math.round(bonusPct * 100)}%）<input type="range" min={5} max={200} step={5} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label>}
+      <div className="q-top"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b><small>{name(t.assignee)} · {t.plan ? "想加入每日例行" : t.kind === "proposal" ? "主動提案" : "交辦"} · {when(t.submitted_at ?? t.created_at)}</small></div>
+        <span className="cost">{t.plan ? `每次 +${adj[t.id] ?? t.points}` : `+${t.kind === "proposal" ? Math.round((adj[t.id] ?? t.points) * (1 + bonusPct)) : adj[t.id] ?? t.points}`}</span></div>
+      {t.plan && <><div className="plan-box">📅 {scheduleText(t.plan)}{t.plan.pack && PACKS[t.plan.pack] ? ` · ${PACKS[t.plan.pack].icon} ${PACKS[t.plan.pack].name}` : ""}<br /><small className="hint">核准後會變成例行任務，之後每次做完一樣要你核准才給點。</small></div>
+        <label className="field">每次點數 {adj[t.id] ?? t.points}<input type="range" min={1} max={50} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label></>}
+      {t.kind === "proposal" && !t.plan && <label className="field">核准點數 {adj[t.id] ?? t.points}（另加主動加成 {Math.round(bonusPct * 100)}%）<input type="range" min={5} max={200} step={5} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label>}
       {t.photo_path && <Photo path={t.photo_path} />}
-      <div className="row"><button className="btn line sm" onClick={() => reject(t)}>退回</button><button className="btn good sm" onClick={() => approve(t)}>核准</button></div>
+      <div className="row"><button className="btn line sm" onClick={() => reject(t)}>退回</button><button className="btn good sm" onClick={() => approve(t)}>{t.plan ? "核准加入例行" : "核准"}</button></div>
     </div>)}
     {data.reds.map((x) => <div className="card" key={x.id}>
       <div className="q-top"><span className="emo">{x.emoji}</span><div className="mid"><b>兌換：{x.title}</b><small>{name(x.member_id)} · 用{x.source === "jar" ? "存錢罐" : "零用包"} · {when(x.created_at)}</small></div><span className="cost">{x.cost}</span></div>

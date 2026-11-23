@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Reward, TIER, Template, rpc, sb } from "../supabase";
+import { PACKS, Reward, TIER, Template, rpc, sb, scheduleText } from "../supabase";
+import { SchedulePick } from "../ui/Schedule";
 
-const DAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
 export function Manage() {
   const { members, tick, refresh } = useStore(); const ui = useUi();
@@ -24,7 +24,7 @@ export function Manage() {
       const list = tpls.filter((t) => (t.pack ?? "") === pk); if (!list.length) return null;
       return <div className="card" key={pk || "none"}><div className="pack-head"><b>{pk ? `${PACKS[pk].icon} ${PACKS[pk].name}` : "其他"}</b><small>{pk ? PACKS[pk].time : ""}</small></div>
         {list.map((t) => <button className="rew" key={t.id} style={{ textAlign: "left", opacity: t.active ? 1 : 0.45 }} onClick={() => editT(t)}><span className="emo" style={{ width: 40, height: 40, fontSize: 22 }}>{t.emoji}</span>
-          <div className="mid"><b>{t.title}</b><small>{kids.length > 1 ? name(t.assignee) + " · " : ""}{t.days.length === 7 ? "每天" : t.days.map((d) => DAYS[d]).join("")}{t.photo === "required" ? " · 需拍照" : t.photo === "optional" ? " · 可拍照" : ""}{t.active ? "" : " · 已停用"}</small></div><span className="cost">+{t.points}</span></button>)}</div>;
+          <div className="mid"><b>{t.title}</b><small>{kids.length > 1 ? name(t.assignee) + " · " : ""}{scheduleText(t)}{t.photo === "required" ? " · 需拍照" : t.photo === "optional" ? " · 可拍照" : ""}{t.active ? "" : " · 已停用"}</small></div><span className="cost">+{t.points}</span></button>)}</div>;
     })}
     {kids.length > 0 && <button className="btn ghost" onClick={() => editT()}>＋ 新增例行任務</button>}
 
@@ -45,7 +45,7 @@ function DeleteZone({ label, onDelete }: { label: string; onDelete: () => Promis
 
 function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
   const { members } = useStore(); const ui = useUi(); const kids = members.filter((m) => m.role === "child");
-  const [f, setF] = useState({ id: t?.id ?? "", assignee: t?.assignee ?? kids[0]?.id, title: t?.title ?? "", emoji: t?.emoji ?? "✅", points: t?.points ?? 5, pack: (t ? t.pack : "pm") as Template["pack"], days: t?.days ?? [0, 1, 2, 3, 4, 5, 6], photo: t?.photo ?? "none", active: t?.active ?? true });
+  const [f, setF] = useState({ id: t?.id ?? "", assignee: t?.assignee ?? kids[0]?.id, title: t?.title ?? "", emoji: t?.emoji ?? "✅", points: t?.points ?? 5, pack: (t ? t.pack : "pm") as Template["pack"], days: t?.days ?? [0, 1, 2, 3, 4, 5, 6], dates: t?.dates ?? [], at_time: (t?.at_time ?? "").slice(0, 5), photo: t?.photo ?? "none", active: t?.active ?? true });
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
   return <>
     <h3>{t ? "修改例行任務" : "新增例行任務"}</h3>
@@ -53,12 +53,12 @@ function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
     {kids.length > 1 && <div className="row">{kids.map((k) => <button key={k.id} className={`chip ${f.assignee === k.id ? "on" : ""}`} onClick={() => set({ assignee: k.id })}>{k.avatar} {k.display_name}</button>)}</div>}
     <label className="field">點數：<b style={{ color: "var(--gold)" }}>{f.points}</b><input type="range" min={1} max={50} value={f.points} onChange={(e) => set({ points: +e.target.value })} /></label>
     <div className="field">時段<div className="row">{Object.entries(PACKS).map(([k, p]) => <button key={k} className={`chip ${f.pack === k ? "on" : ""}`} onClick={() => set({ pack: k as Template["pack"] })}>{p.icon} {p.name}</button>)}</div></div>
-    <div className="field">哪幾天<div className="days">{DAYS.map((d, i) => <button key={i} className={f.days.includes(i) ? "on" : ""} onClick={() => set({ days: f.days.includes(i) ? f.days.filter((x) => x !== i) : [...f.days, i].sort() })}>{d}</button>)}</div></div>
+    <SchedulePick idp="t" value={{ days: f.days, dates: f.dates, at_time: f.at_time }} onChange={(v) => set(v)} />
     <div className="field">照片<div className="row">{([["none", "不需要"], ["optional", "可附"], ["required", "必須"]] as const).map(([k, l]) => <button key={k} className={`chip ${f.photo === k ? "on" : ""}`} onClick={() => set({ photo: k })}>{l}</button>)}</div></div>
     <EmojiPick value={f.emoji} onChange={(e) => set({ emoji: e })} />
     {t && <div className="set-row"><div>啟用<small>暫時不用可以先停用，不需要了就刪除</small></div><button className={`switch ${f.active ? "on" : ""}`} role="switch" aria-checked={f.active} aria-label="啟用" onClick={() => set({ active: !f.active })} /></div>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!f.title.trim() || f.days.length === 0} onClick={async () => { const r = await ui.busy(rpc("save_template", { p: f })); if (r !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
+      <button className="btn" disabled={!f.title.trim() || (f.dates.length === 0 && f.days.length === 0)} onClick={async () => { const r = await ui.busy(rpc("save_template", { p: { ...f, days: f.dates.length ? [] : f.days } })); if (r !== undefined) { ui.toast("已儲存"); onDone(); } }}>儲存</button></div>
     {t && <DeleteZone label={t.title} onDelete={async () => { const r = await ui.busy(rpc("delete_template", { p_id: t.id })); if (r !== undefined) { ui.toast("已刪除"); onDone(); } }} />}
   </>;
 }
