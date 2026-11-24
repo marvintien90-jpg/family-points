@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { useDailyBrief } from "../Brief";
 import { useUi, RollNumber, floatPoints, useTab } from "../ui/ui";
-import { Ledger, Notice, Redemption, Reward, Task, Wallet, jarTier, rpc, sb, todayTW } from "../supabase";
+import { Ledger, Notice, Redemption, Reward, Streak, Task, Wallet, jarTier, rpc, sb, todayTW } from "../supabase";
 import { Today } from "./Today";
 import { Shop } from "./Shop";
 import { Jar } from "./Jar";
 import { Me } from "./Me";
 import { History } from "../History";
 
-export interface KidData { wallet: Wallet | null; tasks: Task[]; rewards: Reward[]; redemptions: Redemption[]; ledger: Ledger[]; notices: Notice[]; reload: () => Promise<void> }
+export interface KidData { wallet: Wallet | null; tasks: Task[]; rewards: Reward[]; redemptions: Redemption[]; ledger: Ledger[]; notices: Notice[]; streak: Streak | null; reload: () => Promise<void> }
 
 const TABS = [["today", "📋", "今天"], ["shop", "🎁", "商店"], ["jar", "🫙", "存錢罐"], ["history", "📖", "回顧"], ["me", "⭐", "我"]] as const;
 type Tab = (typeof TABS)[number][0];
@@ -18,22 +18,23 @@ export function KidApp() {
   const { me, tick } = useStore(); const ui = useUi();
   const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "today");
   useDailyBrief((t) => setTab(t as Tab));
-  const [d, setD] = useState<Omit<KidData, "reload">>({ wallet: null, tasks: [], rewards: [], redemptions: [], ledger: [], notices: [] });
+  const [d, setD] = useState<Omit<KidData, "reload">>({ wallet: null, tasks: [], rewards: [], redemptions: [], ledger: [], notices: [], streak: null });
   const prev = useRef<{ spend: number; level: number; notice: number } | null>(null);
 
   const reload = useCallback(async () => {
     if (!me) return;
     await rpc("ensure_today").catch(() => {});
     const since = new Date(Date.now() - 7 * 864e5).toISOString();
-    const [wallet, tasks, rewards, reds, ledger, notices] = await Promise.all([
+    const [wallet, tasks, rewards, reds, ledger, notices, streak] = await Promise.all([
       rpc<Wallet>("get_wallet"),
       sb.from("tasks").select("*").eq("assignee", me.id).neq("status", "void").or(`for_date.eq.${todayTW()},and(kind.neq.routine,created_at.gte.${since})`).order("created_at"),
       sb.from("rewards").select("*").eq("active", true).order("cost"),
       sb.from("redemptions").select("*").eq("member_id", me.id).order("created_at", { ascending: false }).limit(20),
       sb.from("ledger").select("*").eq("member_id", me.id).order("created_at", { ascending: false }).limit(40),
       sb.from("notifications").select("*").eq("member_id", me.id).order("created_at", { ascending: false }).limit(20),
+      rpc<Streak>("get_streak").catch(() => null),
     ]);
-    setD({ wallet, tasks: (tasks.data ?? []) as Task[], rewards: (rewards.data ?? []) as Reward[], redemptions: (reds.data ?? []) as Redemption[], ledger: (ledger.data ?? []) as Ledger[], notices: (notices.data ?? []) as Notice[] });
+    setD({ wallet, tasks: (tasks.data ?? []) as Task[], rewards: (rewards.data ?? []) as Reward[], redemptions: (reds.data ?? []) as Redemption[], ledger: (ledger.data ?? []) as Ledger[], notices: (notices.data ?? []) as Notice[], streak });
   }, [me]);
   useEffect(() => { reload(); }, [reload, tick]);
 

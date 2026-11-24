@@ -5,17 +5,22 @@ import { enablePush, pushPermission } from "../push";
 import type { KidData } from "./KidApp";
 
 export function Me({ data }: { data: KidData }) {
-  const { me } = useStore(); const ui = useUi(); const w = data.wallet;
+  const { me, family } = useStore(); const ui = useUi(); const w = data.wallet;
   const approved = data.ledger.filter((l) => l.amount > 0).length;
   const badges: [string, string, boolean][] = [
     ["🌱", "第一次賺點", approved > 0], ["💰", "第一次存錢", (w?.jar_raw ?? 0) > 0 || data.ledger.some((l) => l.reason.startsWith("存入"))],
     ["🥈", "銀罐", (w?.best_days ?? 0) >= 14], ["🥇", "金罐", (w?.best_days ?? 0) >= 30], ["💎", "鑽石罐", (w?.best_days ?? 0) >= 60],
+    ["🔥", "連續 7 天", (data.streak?.b7 ?? 0) + (data.streak?.b30 ?? 0) > 0 || (data.streak?.current ?? 0) >= 7], ["🏆", "連續 30 天", (data.streak?.b30 ?? 0) > 0 || (data.streak?.current ?? 0) >= 30],
     ["🏅", "Lv 5", (w?.level ?? 1) >= 5], ["🏆", "Lv 10", (w?.level ?? 1) >= 10], ["🎁", "第一次兌換", data.redemptions.some((r) => r.status === "approved")],
   ];
   const perm = pushPermission();
   return <>
     {perm !== "granted" && <div className="card"><b>打開通知</b><p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>爸媽核准、給你點數的時候，手機會馬上告訴你。</p>
       <button className="btn" onClick={async () => { const r = await ui.busy(enablePush(me!.id).then(() => true)); if (r) ui.toast("通知打開了"); }}>開啟通知</button></div>}
+    {data.streak && <><h2 className="sec">連續達成<small>每天的例行全部完成就 +1</small></h2>
+      <div className="card"><div className="streak-stats"><div><b>{data.streak.current}</b><small>目前連續天數</small></div><div><b>{data.streak.b7}</b><small>🔥 7 天獎</small></div><div><b>{data.streak.b30}</b><small>🏆 30 天獎</small></div></div>
+        <div className="goal-bar"><i style={{ width: `${Math.round(((data.streak.current % 7) / 7) * 100)}%` }} /></div>
+        <small className="hint">連續 7 天自動 +{String(family?.settings.streak7_bonus ?? 30)}，連續 30 天自動 +{String(family?.settings.streak30_bonus ?? 150)}</small></div></>}
     <h2 className="sec">徽章<small>{badges.filter((b) => b[2]).length} / {badges.length}</small></h2>
     <div className="card"><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>{badges.map(([e, n, on]) => <div key={n} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--muted)", textAlign: "center" }}>
       <i style={{ fontStyle: "normal", fontSize: 26, width: 52, height: 52, borderRadius: "50%", display: "grid", placeItems: "center", background: on ? "var(--gold-soft)" : "var(--surface-2)", filter: on ? "none" : "grayscale(1)", opacity: on ? 1 : 0.4 }}>{e}</i>{n}</div>)}</div></div>

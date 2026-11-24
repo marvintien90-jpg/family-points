@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Task, dueText, packTime, rpc, sb, scheduleText, timeOf } from "../supabase";
+import { PACKS, Task, dueText, packTime, rpc, scheduleText, timeOf } from "../supabase";
 import { SchedulePick, Sched } from "../ui/Schedule";
 import type { KidData } from "./KidApp";
 
-async function shrink(file: File): Promise<Blob> {
-  const img = await createImageBitmap(file); const s = Math.min(1, 1280 / Math.max(img.width, img.height));
-  const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-  c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
-  return new Promise((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.82));
+import { uploadPhoto } from "../ui/Photo";
+
+// 連續達成：下一個里程碑（每 7 天、每 30 天）
+export function nextStreak(cur: number, s7: number, s30: number) {
+  const to7 = 7 - (cur % 7), to30 = 30 - (cur % 30);
+  return to30 <= to7 ? { days: to30, bonus: s30, goal: cur + to30 } : { days: to7, bonus: s7, goal: cur + to7 };
 }
 
 export function Today({ data }: { data: KidData }) {
@@ -35,7 +36,11 @@ export function Today({ data }: { data: KidData }) {
     if (r !== undefined) { setPicked(new Set()); ui.toast("已送出，等爸媽核准"); data.reload(); }
   }
 
+  const st = data.streak; const nx = nextStreak(st?.current ?? 0, Number(family?.settings.streak7_bonus ?? 30), Number(family?.settings.streak30_bonus ?? 150));
   return <>
+    {st && routines.length > 0 && <div className={`card streak ${st.current > 0 ? "hot" : ""}`}><span className="fire">{st.current > 0 ? "🔥" : "🌱"}</span>
+      <div className="mid"><b>{st.current > 0 ? `連續 ${st.current} 天全部完成` : "今天開始累積連續紀錄"}</b>
+        <small>{st.today_done ? "今天已經全部完成 🎉 " : "今天的例行全部完成就 +1 天 · "}再 {nx.days} 天到 {nx.goal} 天，自動 +{nx.bonus}</small></div></div>}
     <h2 className="sec">例行清單<small>一整組都完成再 +{String(family?.settings.pack_bonus ?? 10)} 全勤獎</small></h2>
     {routines.length === 0 && <div className="card empty">今天沒有例行任務</div>}
     {(["am", "pm", "bed"] as const).map((pk) => {
@@ -84,9 +89,7 @@ function PhotoSheet({ required, onDone }: { required: boolean; onDone: (path: st
     if (!file) { onDone(null); return; }
     setBusy(true);
     try {
-      const blob = await shrink(file); const path = `${family!.id}/${crypto.randomUUID()}.jpg`;
-      const { error } = await sb.storage.from("task-photos").upload(path, blob, { contentType: "image/jpeg" });
-      if (error) throw error; onDone(path);
+      onDone(await uploadPhoto(family!.id, file));
     } catch (e) { ui.toast(`照片上傳失敗：${e instanceof Error ? e.message : e}`); } finally { setBusy(false); }
   }
   return <>
@@ -99,7 +102,7 @@ function PhotoSheet({ required, onDone }: { required: boolean; onDone: (path: st
 }
 
 function ProposeSheet({ onDone }: { onDone: () => void }) {
-  const ui = useUi(); const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("🌱"); const [pts, setPts] = useState(30);
+  const ui = useUi(); const { family } = useStore(); const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState<string | null>(null); const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("🌱"); const [pts, setPts] = useState(30);
   const [kind, setKind] = useState<"once" | "routine">("once");
   const [plan, setPlan] = useState<Sched & { pack: string }>({ days: [0, 1, 2, 3, 4, 5, 6], dates: [], at_time: "", pack: "pm" });
   const routine = kind === "routine";
@@ -113,11 +116,18 @@ function ProposeSheet({ onDone }: { onDone: () => void }) {
       <label className="field">每次建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={1} max={100} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
       <div className="field">時段<div className="row">{Object.entries(PACKS).map(([k, p]) => <button key={k} className={`chip ${plan.pack === k ? "on" : ""}`} onClick={() => setPlan({ ...plan, pack: k })}>{p.icon} {p.name}</button>)}</div></div>
       <SchedulePick idp="p" value={plan} onChange={(v) => setPlan({ ...plan, ...v })} />
-    </> : <label className="field">建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={5} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>}
+    </> : <><label className="field">建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={5} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
+      <div className="field">照片佐證（選填，已經做完的話拍給爸媽看）
+        {preview && <img className="q-photo" src={preview} alt="預覽" />}
+        <label className="btn line sm">📷 {preview ? "重拍" : "拍照或選照片"}<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } }} /></label></div></>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
       <button className="btn" disabled={!title.trim() || (routine && plan.days.length === 0 && plan.dates.length === 0)} onClick={async () => {
         const p_plan = routine ? { days: plan.dates.length ? [] : plan.days, dates: plan.dates, at_time: plan.at_time || null, pack: plan.pack } : null;
-        const r = await ui.busy(rpc("propose_task", { p_title: title, p_emoji: emoji, p_points: pts, p_plan }));
+        const r = await ui.busy((async () => {
+          const tid = await rpc<string>("propose_task", { p_title: title, p_emoji: emoji, p_points: pts, p_plan });
+          if (file && !routine) await rpc("attach_photo", { p_task: tid, p_path: await uploadPhoto(family!.id, file) });
+          return tid;
+        })());
         if (r !== undefined) { ui.toast(routine ? "已送出，等爸媽審核" : "提案送出了！"); onDone(); } }}>送出提案</button></div>
   </>;
 }

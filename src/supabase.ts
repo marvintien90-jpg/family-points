@@ -3,7 +3,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config";
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 export type Role = "admin" | "parent" | "child" | "guest";
-export interface Member { id: string; family_id: string; display_name: string; role: Role; avatar: string; login_id: string; dream_reward_id: string | null }
+export interface Member { id: string; family_id: string; display_name: string; role: Role; avatar: string; login_id: string; dream_reward_id: string | null; goal?: Goal | null }
+export interface Goal { title: string; emoji: string; amount: number }
 export interface Family { id: string; name: string; settings: Record<string, number | string> }
 export interface Task {
   id: string; kind: "routine" | "proposal" | "errand"; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null;
@@ -16,7 +17,7 @@ export interface Template { id: string; assignee: string; title: string; emoji: 
 export interface Reward { id: string; title: string; emoji: string; cost: number; tier: "small" | "medium" | "large"; active: boolean }
 export interface Redemption { id: string; member_id: string; title: string; emoji: string; cost: number; source: "spend" | "jar"; status: "pending" | "approved" | "rejected"; reject_reason: string | null; created_at: string }
 export interface Ledger { id: number; member_id: string; account: "spend" | "jar"; amount: number; reason: string; created_at: string; created_by: string | null; ref_type?: string | null; ref_id?: string | null; ref_ledger?: number | null }
-export interface Wallet { member_id: string; spend: number; jar_raw: number; jar_value: number; best_days: number; lifetime: number; level: number; level_points: number; lots: { id: string; amount: number; days: number }[] }
+export interface Wallet { member_id: string; spend: number; jar_raw: number; jar_value: number; best_days: number; interest_on?: boolean; next_interest?: number; lifetime: number; level: number; level_points: number; lots: { id: string; amount: number; days: number }[] }
 export interface Notice { id: number; title: string; body: string; url: string; created_at: string; read_at: string | null }
 
 export async function rpc<T = unknown>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -75,3 +76,6 @@ export const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeS
 // 時段完成時間：管理員可以在設定改，預設 早上 07:30、放學後 18:00、睡前 21:00
 export const PACK_DEFAULT: Record<string, string> = { am: "07:30", pm: "18:00", bed: "21:00" };
 export const packTime = (settings: Record<string, number | string> | undefined, pk: string) => `${String(settings?.[`pack_${pk}`] ?? PACK_DEFAULT[pk] ?? "")} 前`;
+
+export interface Streak { current: number; today_done: boolean; b7: number; b30: number }
+export interface WeekReport { start: string; end: string; earned: number; deducted: number; spent: number; saved: number; interest: number; routine_total: number; routine_done: number; errands_done: number; proposals_done: number; ratings: Record<string, number>; streak: number; spend_balance: number; jar: number }

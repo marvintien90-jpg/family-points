@@ -5,12 +5,8 @@ import { Redemption, Task, jarTier, rpc, sb, when, scheduleText, PACKS } from ".
 import type { ParentData } from "./ParentApp";
 import { BonusSheet } from "./ParentApp";
 import { RateSheet } from "../ui/Rate";
+import { Photo } from "../ui/Photo";
 
-function Photo({ path }: { path: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => { sb.storage.from("task-photos").createSignedUrl(path, 3600).then(({ data }) => setUrl(data?.signedUrl ?? null)); }, [path]);
-  return url ? <img className="q-photo" src={url} alt="任務照片" /> : null;
-}
 
 export function Queue({ data }: { data: ParentData }) {
   const { me, members, family } = useStore(); const ui = useUi();

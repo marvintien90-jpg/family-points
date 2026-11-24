@@ -6,6 +6,7 @@ import { Task, dueText, rpc, sb, when } from "../supabase";
 import { RejectSheet } from "./Queue";
 import { RateSheet } from "../ui/Rate";
 import { DuePick, twDefault, twToIso } from "../ui/Schedule";
+import { Photo } from "../ui/Photo";
 
 export function Errands() {
   const { me, members, tick, refresh } = useStore(); const ui = useUi();
@@ -44,7 +45,9 @@ export function Errands() {
       <div className="lot"><span>截止</span><b>{t.due_at ? dueText(t.due_at) : "沒有截止時間"}</b></div>
       <div className="lot"><span>點數</span><b>{t.points ? `+${t.points}` : "—"}</b></div>
       <div className="lot"><span>狀態</span><span className={`tag ${status(t)[1]}`}>{status(t)[0]}</span></div>
-      {t.reject_reason && <div className="lot"><span>備註</span><b>{t.reject_reason}</b></div>}</div>
+      {t.reject_reason && <div className="lot"><span>備註</span><b>{t.reject_reason}</b></div>}
+      {t.photo === "required" && <div className="lot"><span>照片</span><b>完成時必須拍照</b></div>}</div>
+    {t.photo_path && <div className="field">📷 完成照片<Photo path={t.photo_path} /></div>}
     {a.more.length > 0 ? <div className="row">{a.more.map((x) => <button key={x.label} className={`btn ${x.tone === "bad" ? "bad" : x.tone === "good" ? "good" : x.tone === "gold" ? "line" : "ghost"}`} onClick={() => { ui.sheet(null); setTimeout(x.run, 60); }}>{x.icon} {x.label}</button>)}</div> : <p>訪客只能查看。</p>}
   </>); };
   const shown = filter === "open" ? open : done;
@@ -58,7 +61,7 @@ export function Errands() {
     {shown.map((t, i) => { const a = actions(t); const [txt, cls] = status(t);
       return <SwipeRow key={t.id} left={a.left} right={a.right} onTap={() => detail(t)}>
         <div className={`card ${i === 0 && !isGuest ? "hint-nudge" : ""}`}><div className="rew"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b>
-          <small>{avatar(t.assignee)} {name(t.assignee)}{t.due_at && t.status !== "approved" ? ` · ${dueText(t.due_at)}` : ""}{t.status === "approved" ? ` · ${when(t.decided_at ?? t.created_at)}` : ""}{t.points ? ` · +${t.points}` : ""}</small></div>
+          <small>{avatar(t.assignee)} {name(t.assignee)}{t.photo_path ? " · 📷" : ""}{t.due_at && t.status !== "approved" ? ` · ${dueText(t.due_at)}` : ""}{t.status === "approved" ? ` · ${when(t.decided_at ?? t.created_at)}` : ""}{t.points ? ` · +${t.points}` : ""}</small></div>
           <span className={`tag ${cls}`}>{txt}</span></div></div>
       </SwipeRow>; })}
   </>;
@@ -79,7 +82,7 @@ export function ErrandSheet() {
   const { members, refresh } = useStore(); const ui = useUi();
   const people = members.filter((m) => m.role !== "guest");
   const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("📌"); const [who, setWho] = useState(people.find((m) => m.role === "child")?.id ?? people[0]?.id);
-  const [due, setDue] = useState(twDefault(1, "20:00")); const [pts, setPts] = useState("10");
+  const [due, setDue] = useState(twDefault(1, "20:00")); const [pts, setPts] = useState("10"); const [photo, setPhoto] = useState<"optional" | "required">("optional");
   const isKid = members.find((m) => m.id === who)?.role === "child";
   return <>
     <h3>交辦家庭事項</h3>
@@ -88,9 +91,10 @@ export function ErrandSheet() {
     <DuePick value={due} onChange={setDue} />
     {isKid && <><label className="field">完成可得點數（0 到 5000）<input type="text" id="e-pts" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pts} onChange={(e) => setPts(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} /></label>
       <div className="row">{[10, 50, 100, 500, 1000, 5000].map((n) => <button key={n} className={`chip ${pts === String(n) ? "on" : ""}`} onClick={() => setPts(String(n))}>{n}</button>)}</div>
-      {Number(pts) > 5000 && <div className="warn">交辦獎勵最多 5000 點</div>}</>}
+      {Number(pts) > 5000 && <div className="warn">交辦獎勵最多 5000 點</div>}
+      <div className="field">照片佐證<div className="seg"><button className={photo === "optional" ? "on" : ""} onClick={() => setPhoto("optional")}>可附照片</button><button className={photo === "required" ? "on" : ""} onClick={() => setPhoto("required")}>📷 必須拍照</button></div></div></>}
     <EmojiPick value={emoji} onChange={setEmoji} />
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!title.trim() || (isKid && Number(pts) > 5000)} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: twToIso(due), p_points: isKid ? Number(pts) || 0 : 0 })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
+      <button className="btn" disabled={!title.trim() || (isKid && Number(pts) > 5000)} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: twToIso(due), p_points: isKid ? Number(pts) || 0 : 0, p_photo: isKid ? photo : "none" })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
   </>;
 }

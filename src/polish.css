@@ -175,3 +175,38 @@ h2.sec{animation:rise .38s var(--ease-out) both}
 .rate-opt{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;border:1.5px solid var(--line);border-radius:16px;background:var(--surface);font-weight:700;font-size:15px}
 .rate-opt span{font-size:30px;line-height:1}
 .rate-opt:active{transform:scale(.95);border-color:var(--accent);background:var(--accent-soft)}
+
+/* v1.6 連續達成、存錢目標、扣點、每週報告、LINE */
+.card.streak{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.card.streak .fire{font-size:30px;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);flex:none}
+.card.streak.hot .fire{background:var(--gold-soft);animation:fp-flame 2.4s ease-in-out infinite}
+.card.streak .mid{display:flex;flex-direction:column;gap:2px;min-width:0}
+.card.streak small{color:var(--muted);font-size:12.5px;line-height:1.45}
+@keyframes fp-flame{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){.card.streak.hot .fire{animation:none}}
+.streak-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.streak-stats b{display:block;font-family:var(--f-num);font-size:26px}
+.streak-stats small{color:var(--muted);font-size:12px}
+.goal-bar.big{height:18px;border-radius:9px;position:relative}
+.goal-bar .tick{position:absolute;top:3px;bottom:3px;width:2px;margin-left:-1px;background:var(--line);border-radius:1px}
+.goal-bar .tick.on{background:rgba(255,255,255,.7)}
+.goal-card .hint{display:block;margin-top:2px}
+.cap-meter{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
+.cap-meter small{display:block;color:var(--muted);font-size:12px}
+.cap-meter .goal-bar i{background:linear-gradient(90deg,var(--gold),var(--bad))}
+.cap-meter.full{background:var(--gold-soft)}
+.chip:disabled{opacity:.35;pointer-events:none}
+.rate-bar{display:grid;grid-template-columns:84px 1fr 28px;align-items:center;gap:8px;font-size:13.5px;padding:4px 0}
+.rate-bar b{text-align:right;font-family:var(--f-num)}
+.st.warn-st b{color:var(--bad)}
+.rule-group{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--surface-2)}
+.rule-group>small{color:var(--muted);font-size:12px;margin-top:-6px}
+.rule-group textarea,.field textarea{font:inherit;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);color:var(--ink);resize:vertical;width:100%;box-sizing:border-box}
+.bind-code{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px;border-radius:14px;border:2px dashed var(--gold);background:var(--gold-soft)}
+.bind-code b{font-family:var(--f-num);font-size:28px;letter-spacing:2px}
+.bind-code small{color:var(--muted);font-size:12px}
+.line-card .step small{display:block;color:var(--muted);font-size:12px}
+.line-card input[readonly]{font-size:12px;color:var(--muted)}
+.q-photo.ph{height:160px;background:var(--surface-2);animation:fp-pulse 1.2s ease-in-out infinite}
+@keyframes fp-pulse{50%{opacity:.5}}
+.report-btn{margin-bottom:2px}

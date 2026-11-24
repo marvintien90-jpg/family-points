@@ -1,5 +1,6 @@
 import { useStore } from "../store";
-import { RollNumber, flyCoins, useUi } from "../ui/ui";
+import { useState } from "react";
+import { EmojiPick, RollNumber, flyCoins, useUi } from "../ui/ui";
 import { jarMult, jarTier, rpc } from "../supabase";
 import type { KidData } from "./KidApp";
 
@@ -12,7 +13,9 @@ function JarArt({ days, fill }: { days: number; fill: number }) {
 
 export function Jar({ data }: { data: KidData }) {
   const { me, family } = useStore(); const ui = useUi(); const w = data.wallet;
-  const dream = data.rewards.find((r) => r.id === me?.dream_reward_id) ?? data.rewards.filter((r) => r.tier === "large")[0];
+  const rw = data.rewards.find((r) => r.id === me?.dream_reward_id) ?? data.rewards.filter((r) => r.tier === "large")[0];
+  const g = me?.goal;
+  const dream = g ? { emoji: g.emoji, title: g.title, cost: g.amount } : rw;
   const pct = dream && w ? Math.min(100, Math.round((w.jar_value / dream.cost) * 100)) : 0;
   const bonusPct = Math.round(Number(family?.settings.deposit_bonus ?? 0.05) * 100);
 
@@ -35,12 +38,37 @@ export function Jar({ data }: { data: KidData }) {
       <span className="tag acc">{jarTier(w?.best_days ?? 0)} · 最高倍率 ×{jarMult(w?.best_days ?? 0)}</span>
       <span style={{ fontSize: 13, color: "var(--muted)" }}>零用包還有 {w?.spend ?? 0} 點</span>
       <div className="row"><button className="btn" onClick={(e) => deposit(50, e.currentTarget)}>存 50</button><button className="btn" onClick={(e) => deposit(100, e.currentTarget)}>存 100</button><button className="btn ghost" onClick={(e) => deposit(w?.spend ?? 0, e.currentTarget)}>全部存入</button></div>
-      <small style={{ color: "var(--muted)", fontSize: 12, textAlign: "center" }}>存入立刻多 {bonusPct}%，每週日晚上再加利息</small></div>
-    {dream && <><h2 className="sec">夢想目標<small>{w && w.jar_value < dream.cost ? `還差 ${dream.cost - w.jar_value} 點` : "可以兌換了！"}</small></h2>
-      <div className="card"><div className="rew"><span className="emo">{dream.emoji}</span><div className="mid"><b>{dream.title}</b><small>{w?.jar_value ?? 0} / {dream.cost} 點 · 到商店可以換目標</small></div><b className="cost">{pct}%</b></div><div className="goal-bar"><i style={{ width: `${pct}%` }} /></div></div></>}
+      <small style={{ color: "var(--muted)", fontSize: 12, textAlign: "center" }}>存入立刻多 {bonusPct}%{w?.interest_on === false ? "（存錢罐利息目前關閉）" : `，每週日晚上再加利息${(w?.next_interest ?? 0) > 0 ? `，這週預估 +${w!.next_interest}` : ""}`}</small></div>
+    <h2 className="sec">我的存錢目標<small>{dream ? (w && w.jar_value < dream.cost ? `還差 ${dream.cost - w.jar_value} 點` : "存到了！🎉") : "還沒設定"}</small></h2>
+    <div className="card goal-card">{dream ? <><div className="rew"><span className="emo">{dream.emoji}</span><div className="mid"><b>{dream.title}</b><small>存錢罐 {w?.jar_value ?? 0} / {dream.cost} 點{g ? "" : " · 商店的夢想獎勵"}</small></div><b className="cost">{pct}%</b></div>
+      <div className="goal-bar big"><i style={{ width: `${pct}%` }} />{[25, 50, 75].map((m) => <span key={m} className={`tick ${pct >= m ? "on" : ""}`} style={{ left: `${m}%` }} />)}</div>
+      {w && w.jar_value < dream.cost && <small className="hint">{goalHint(dream.cost - w.jar_value, w.next_interest ?? 0)}</small>}</> : <p className="hint">想買什麼？設一個目標，每次存錢都看得到進度。</p>}
+      <button className="btn line sm" onClick={() => ui.sheet(<GoalSheet />)}>🎯 {g ? "修改目標" : "設定自己的目標"}</button></div>
     <h2 className="sec">存越久越大<small>14 天 ×1.1 · 30 天 ×1.25 · 60 天 ×1.5</small></h2>
     <div className="card">{(w?.lots ?? []).length === 0 ? <div className="empty">還沒有存款，先存一點試試看</div> :
       w!.lots.map((l) => <div className="lot" key={l.id}><span>{l.days} 天前存入 <span className={`tag ${l.days >= 14 ? "gold" : ""}`}>{jarTier(l.days)} ×{jarMult(l.days)}</span></span><span className="n">{l.amount} → {Math.round(l.amount * jarMult(l.days))}</span></div>)}
       {(w?.jar_raw ?? 0) > 0 && <button className="btn line sm" onClick={withdraw}>提前領出到零用包</button>}</div>
+  </>;
+}
+
+const goalHint = (left: number, interest: number) => `每天多存 ${Math.max(1, Math.ceil(left / 30))} 點，大約一個月就能存到${interest > 0 ? `；利息每週也會幫你 +${interest}` : ""}`;
+
+// 孩子自己設的存錢目標（想買的東西、要存幾點）
+export function GoalSheet() {
+  const { me, reloadMe } = useStore(); const ui = useUi(); const g = me?.goal;
+  const [title, setTitle] = useState(g?.title ?? ""); const [emoji, setEmoji] = useState(g?.emoji ?? "🎮"); const [amt, setAmt] = useState(String(g?.amount ?? 500));
+  const save = async (clear = false) => {
+    const r = await ui.busy(rpc("set_goal", clear ? { p_title: null, p_emoji: null, p_amount: null } : { p_title: title, p_emoji: emoji, p_amount: Number(amt) }));
+    if (r !== undefined) { await reloadMe(); ui.sheet(null); ui.toast(clear ? "已清除目標" : "目標設定好了，加油！"); }
+  };
+  return <>
+    <h3>🎯 我的存錢目標</h3><p>寫下想買的東西和需要幾點，存錢罐的進度條會一直陪你。爸媽也會看到。</p>
+    <label className="field">想買什麼<input type="text" id="g-title" maxLength={30} placeholder="例如：Switch 遊戲、樂高" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+    <label className="field">需要幾點<input type="text" id="g-amt" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={amt} onChange={(e) => setAmt(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} /></label>
+    <div className="row">{[300, 500, 1000, 2000, 5000].map((n) => <button key={n} className={`chip ${amt === String(n) ? "on" : ""}`} onClick={() => setAmt(String(n))}>{n}</button>)}</div>
+    <EmojiPick value={emoji} onChange={setEmoji} />
+    <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
+      <button className="btn" disabled={!title.trim() || Number(amt) < 10 || Number(amt) > 100000} onClick={() => save()}>儲存目標</button></div>
+    {g && <button className="link" onClick={() => save(true)}>不設目標了，改用商店的夢想獎勵</button>}
   </>;
 }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "./store";
-import { Ledger, Redemption, Task, rpc, sb } from "./supabase";
+import { Ledger, Redemption, Task, WeekReport, rpc, sb } from "./supabase";
 import { useUi } from "./ui/ui";
 
-const EARN = ["task", "pack", "bonus", "interest", "deposit_bonus", "undo", "adjust"];
-const EDITABLE = ["task", "pack", "bonus"];
+const EARN = ["task", "pack", "bonus", "interest", "deposit_bonus", "undo", "adjust", "streak"];
+const EDITABLE = ["task", "pack", "bonus", "deduct"];
 // 這筆紀錄目前實際有效的點數（任務類含撤銷、修改；激勵只看修改）
 const isPack = (l: Ledger) => l.ref_type === "pack" || l.reason.endsWith("全勤獎");
 export function netOf(rows: Ledger[], l: Ledger) {
@@ -14,7 +14,7 @@ export function netOf(rows: Ledger[], l: Ledger) {
 }
 const dayTW = (iso: string | Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date(iso));
 const pretty = (d: string) => { const t = dayTW(new Date()), y = dayTW(new Date(Date.now() - 864e5)); if (d === t) return "今天"; if (d === y) return "昨天"; const x = new Date(d + "T12:00:00+08:00"); return x.toLocaleDateString("zh-TW", { month: "numeric", day: "numeric", weekday: "short" }); };
-const icon = (l: Ledger) => l.ref_type === "pack" ? "🏅" : l.ref_type === "bonus" ? "⭐" : l.ref_type === "interest" ? "🪙" : l.ref_type === "redeem" ? "🎁" : l.ref_type === "refund" ? "↩️" : l.ref_type === "undo" || l.ref_type === "adjust" ? "⏪" : l.ref_type?.startsWith("deposit") ? "🫙" : l.ref_type === "withdraw" ? "🫙" : "✅";
+const icon = (l: Ledger) => l.ref_type === "streak" ? "🔥" : l.ref_type === "deduct" ? "⚠️" : l.ref_type === "pack" ? "🏅" : l.ref_type === "bonus" ? "⭐" : l.ref_type === "interest" ? "🪙" : l.ref_type === "redeem" ? "🎁" : l.ref_type === "refund" ? "↩️" : l.ref_type === "undo" || l.ref_type === "adjust" ? "⏪" : l.ref_type?.startsWith("deposit") ? "🫙" : l.ref_type === "withdraw" ? "🫙" : "✅";
 
 // 歷史回顧：點數趨勢、完成率、每天發生的事
 export function History() {
@@ -47,11 +47,15 @@ export function History() {
     ]).then(([l, t, r]) => setData({ ledger: (l.data ?? []) as Ledger[], tasks: (t.data ?? []) as Task[], reds: (r.data ?? []) as Redemption[] }));
   }, [who, start, chartStart, reload]);
 
+  useEffect(() => { if (who && new URLSearchParams(location.search).get("report") === "1") { history.replaceState(history.state, "", "?tab=history"); ui.sheet(<ReportSheet kid={who} />); } }, [who]); // eslint-disable-line
   if (!isKid && kids.length === 0) return <><h2 className="sec">歷史回顧</h2><div className="card empty"><span className="big">📖</span>新增孩子之後，這裡會整理每週的努力和點數變化。</div></>;
 
   const inRange = (iso: string) => new Date(iso) >= start;
   const L = (data?.ledger ?? []).filter((l) => inRange(l.created_at));
-  const earned = L.filter((l) => EARN.includes(l.ref_type ?? "")).reduce((a, l) => a + l.amount, 0);
+  const deductIds = new Set((data?.ledger ?? []).filter((l) => l.ref_type === "deduct").map((l) => l.id));
+  const isDeduct = (l: Ledger) => l.ref_type === "deduct" || (l.ref_type === "adjust" && !!l.ref_ledger && deductIds.has(l.ref_ledger));
+  const earned = L.filter((l) => EARN.includes(l.ref_type ?? "") && !isDeduct(l)).reduce((a, l) => a + l.amount, 0);
+  const deducted = -L.filter(isDeduct).reduce((a, l) => a + l.amount, 0);
   const spent = L.filter((l) => l.ref_type === "redeem" || l.ref_type === "refund").reduce((a, l) => a - l.amount, 0);
   const saved = L.filter((l) => l.ref_type === "deposit" && l.account === "jar").reduce((a, l) => a + l.amount, 0);
   const T = (data?.tasks ?? []).filter((t) => inRange(t.created_at) || (t.for_date && new Date(t.for_date + "T12:00:00+08:00") >= start));
@@ -63,7 +67,7 @@ export function History() {
 
   // 14 天趨勢
   const days = Array.from({ length: 14 }, (_, i) => dayTW(new Date(chartStart.getTime() + i * 864e5 + 3600e3)));
-  const perDay = days.map((d) => (data?.ledger ?? []).filter((l) => EARN.includes(l.ref_type ?? "") && dayTW(l.created_at) === d).reduce((a, l) => a + l.amount, 0));
+  const perDay = days.map((d) => (data?.ledger ?? []).filter((l) => EARN.includes(l.ref_type ?? "") && !isDeduct(l) && dayTW(l.created_at) === d).reduce((a, l) => a + l.amount, 0));
   const maxV = Math.max(10, ...perDay); const best = perDay.indexOf(Math.max(...perDay));
 
   // 時間軸
@@ -80,10 +84,11 @@ export function History() {
   return <>
     <h2 className="sec">歷史回顧<small>{isKid ? "看看自己的努力" : `${kidName}的成長紀錄`}</small></h2>
     {!isKid && kids.length > 1 && <div className="row">{kids.map((k) => <button key={k.id} className={`chip ${who === k.id ? "on" : ""}`} onClick={() => setWho(k.id)}>{k.avatar} {k.display_name}</button>)}</div>}
+    {who && <button className="btn ghost report-btn" onClick={() => ui.sheet(<ReportSheet kid={who} />)}>📊 看每週報告</button>}
     <div className="seg three"><button className={range === "week" ? "on" : ""} onClick={() => setRange("week")}>本週</button><button className={range === "month" ? "on" : ""} onClick={() => setRange("month")}>本月</button><button className={range === "all" ? "on" : ""} onClick={() => setRange("all")}>近 90 天</button></div>
     {!data ? <div className="spinner" /> : <>
       <div className="stats">
-        <div className="st hot"><span>賺到</span><b>+{earned}</b><small>點</small></div>
+        <div className="st hot"><span>賺到</span><b>+{earned}</b><small>點{deducted > 0 ? ` · 扣 ${deducted}` : ""}</small></div>
         <div className="st"><span>完成任務</span><b>{doneAll}</b><small>項{proposals ? ` · 主動 ${proposals}` : ""}</small></div>
         <div className="st"><span>例行完成率</span><b>{rate}%</b><div className="ring"><i style={{ width: `${rate}%` }} /></div></div>
         <div className="st"><span>兌換 · 存入</span><b>{spent}</b><small>點 · 存 {saved}</small></div>
@@ -98,12 +103,12 @@ export function History() {
         {perDay[best] > 0 && <small style={{ color: "var(--muted)", fontSize: 12 }}>🏆 最高的一天是 {pretty(days[best])}，賺了 {perDay[best]} 點</small>}
       </div>
       <h2 className="sec">每日紀錄<small>{V.length} 筆</small></h2>
-      {isAdmin && V.some(canEdit) && <p className="edit-hint">✏️ 管理員：點一筆任務或激勵紀錄，可以撤銷誤按的通過、改點數或刪除。</p>}
+      {isAdmin && V.some(canEdit) && <p className="edit-hint">✏️ 管理員：點一筆任務、激勵或扣點紀錄，可以撤銷誤按的通過、改點數、刪除或退回扣點。</p>}
       {V.length === 0 ? <div className="card empty"><span className="big">🌱</span>這段時間還沒有紀錄</div> :
-        [...groups.entries()].map(([d, list]) => { const sum = list.filter((l) => EARN.includes(l.ref_type ?? "")).reduce((a, l) => a + l.amount + (adjOf.get(l.id) ?? 0), 0);
+        [...groups.entries()].map(([d, list]) => { const sum = list.filter((l) => EARN.includes(l.ref_type ?? "") && !isDeduct(l)).reduce((a, l) => a + l.amount + (adjOf.get(l.id) ?? 0), 0);
           return <div className="card tl" key={d}><div className="pack-head"><b>{pretty(d)}</b><small>{sum ? `賺 +${sum}` : ""}</small></div>
             {list.map((l) => { const adj = adjOf.get(l.id); const amt = l.amount + (adj ?? 0); const ed = canEdit(l);
-              const inner = <><span className="tl-ic">{icon(l)}</span><div className="grow">{l.reason}<small>{new Date(l.created_at).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false })} · {l.account === "jar" ? "存錢罐" : "零用包"}{adj ? (amt === 0 ? " · 已刪除" : " · 已修改") : ""}{l.ref_id && rateOf.get(l.ref_id) && l.ref_type === "task" ? ` · ${rateOf.get(l.ref_id)}` : ""}{ed ? " · ✏️" : ""}</small></div><span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></>;
+              const inner = <><span className="tl-ic">{icon(l)}</span><div className="grow">{l.reason}<small>{new Date(l.created_at).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false })} · {l.account === "jar" ? "存錢罐" : "零用包"}{adj ? (amt === 0 ? (l.ref_type === "deduct" ? " · 已退回" : " · 已刪除") : " · 已修改") : ""}{l.ref_id && rateOf.get(l.ref_id) && l.ref_type === "task" ? ` · ${rateOf.get(l.ref_id)}` : ""}{ed ? " · ✏️" : ""}</small></div><span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></>;
               const cls = `tl-row${ed ? " editable" : ""}${adj && amt === 0 ? " gone" : ""}`;
               return ed ? <button type="button" className={cls} key={l.id} onClick={() => openEdit(l)} style={{ width: "100%", textAlign: "left" }}>{inner}</button> : <div className={cls} key={l.id}>{inner}</div>; })}</div>; })}
       {V.length > limit && <button className="btn line" onClick={() => setLimit(limit + 60)}>看更早的紀錄</button>}
@@ -121,7 +126,13 @@ function EditSheet({ l, now, onDone }: { l: Ledger; now: number; onDone: () => v
   useEffect(() => { if (l.ref_type === "task" && l.ref_id) sb.from("tasks").select("*").eq("id", l.ref_id).maybeSingle().then(({ data }) => setTask((data ?? null) as Task | null)); }, [l]);
   const canRedo = task && !task.plan && task.status !== "void" && task.status !== "todo";
   const redo = async (mode: "redo" | "void") => { const r = await ui.busy(rpc<number>("admin_redo_task", { p_task: task!.id, p_mode: mode, p_reason: mode === "redo" ? why : "這項不算" })); if (r !== undefined) { ui.toast(mode === "redo" ? `已退回重做${r ? `，收回 ${r} 點` : ""}` : `已作廢${r ? `，收回 ${r} 點` : ""}`); onDone(); } };
-  const save = async (n: number) => { const r = await ui.busy(rpc("admin_edit_ledger", { p_id: l.id, p_amount: n })); if (r !== undefined) { ui.toast(n === 0 ? "已刪除這筆點數" : `已改成 ${n} 點`); onDone(); } };
+  const save = async (n: number) => { const r = await ui.busy(rpc("admin_edit_ledger", { p_id: l.id, p_amount: n })); if (r !== undefined) { ui.toast(l.ref_type === "deduct" ? "扣的點數已退回" : n === 0 ? "已刪除這筆點數" : `已改成 ${n} 點`); onDone(); } };
+  if (l.ref_type === "deduct") return <>
+    <h3>扣點紀錄</h3>
+    <div className="plan-box"><b>{l.reason}</b><br /><small className="hint">{new Date(l.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} · 目前 {now} 點{now !== l.amount ? `（原本 ${l.amount}）` : ""}</small></div>
+    {now === 0 ? <div className="card empty">這筆扣點已經退回了</div> : <><p>扣錯了或孩子已經改正？可以把扣的點數退回，紀錄會保留並標示「已退回」，孩子會收到通知。</p>
+      <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button><button className="btn good" onClick={() => save(0)}>↩️ 退回 {-now} 點</button></div></>}
+  </>;
   return <>
     <h3>修改紀錄</h3>
     <div className="plan-box"><b>{l.reason}</b><br /><small className="hint">{new Date(l.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} · 目前 {now} 點{now !== l.amount ? `（原本 ${l.amount}）` : ""}</small></div>
@@ -168,5 +179,41 @@ export function LedgerAdmin() {
           <span className="tl-ic">{icon(l)}</span>
           <div className="grow">{l.reason}<small>{kids.length > 1 && k ? `${k.avatar} ${k.display_name} · ` : ""}{new Date(l.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}{adj ? (amt === 0 ? " · 已刪除" : " · 已修改") : ""}{ok(l) ? " · ✏️" : l.account === "jar" ? " · 存錢罐（不能改）" : l.ref_type === "redeem" || l.ref_type === "refund" ? " · 兌換（到待辦處理）" : ""}</small></div>
           <span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></button>; })}</div>}
+  </>;
+}
+
+// 每週報告：賺了多少、花了多少、完成率、評價分布、連續天數（週日晚上也會推播給家長）
+export function ReportSheet({ kid }: { kid: string }) {
+  const { members } = useStore(); const ui = useUi();
+  const [back, setBack] = useState(0); const [r, setR] = useState<WeekReport | null>(null); const [err, setErr] = useState("");
+  const k = members.find((m) => m.id === kid);
+  useEffect(() => {
+    setR(null); setErr("");
+    const end = dayTW(new Date(Date.now() - back * 7 * 864e5));
+    rpc<WeekReport>("get_week_report", { p_member: kid, p_end: end }).then(setR).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
+  }, [kid, back]);
+  const rate = r && r.routine_total ? Math.round((r.routine_done / r.routine_total) * 100) : 0;
+  const ratings = r ? Object.entries(r.ratings).sort((a, b) => b[1] - a[1]) : [];
+  const totalR = ratings.reduce((a, [, n]) => a + n, 0);
+  const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  return <>
+    <h3>📊 {k?.avatar} {k?.display_name}的每週報告</h3>
+    <div className="seg three"><button className={back === 0 ? "on" : ""} onClick={() => setBack(0)}>最近 7 天</button><button className={back === 1 ? "on" : ""} onClick={() => setBack(1)}>前一週</button><button className={back === 2 ? "on" : ""} onClick={() => setBack(2)}>再前一週</button></div>
+    {err ? <div className="warn">{err}</div> : !r ? <div className="spinner" /> : <>
+      <p className="hint" style={{ margin: 0 }}>{md(r.start)} – {md(r.end)}</p>
+      <div className="stats">
+        <div className="st hot"><span>賺到</span><b>+{r.earned}</b><small>點</small></div>
+        <div className="st"><span>兌換花掉</span><b>{r.spent}</b><small>點 · 存入 {r.saved}</small></div>
+        <div className="st"><span>例行完成率</span><b>{r.routine_total ? `${rate}%` : "—"}</b><div className="ring"><i style={{ width: `${rate}%` }} /></div><small>{r.routine_done}/{r.routine_total}</small></div>
+        <div className="st"><span>交辦 · 主動</span><b>{r.errands_done} · {r.proposals_done}</b><small>件</small></div>
+        <div className="st"><span>連續全部完成</span><b>🔥 {r.streak}</b><small>天</small></div>
+        <div className={`st ${r.deducted > 0 ? "warn-st" : ""}`}><span>扣點</span><b>{r.deducted}</b><small>點</small></div>
+      </div>
+      <div className="card"><div className="pack-head"><b>評價分布</b><small>{totalR} 次</small></div>
+        {totalR === 0 ? <div className="empty">這週還沒有評價</div> : ratings.map(([name, n]) => <div className="rate-bar" key={name}><span>{name}</span><div className="goal-bar"><i style={{ width: `${(n / totalR) * 100}%` }} /></div><b>{n}</b></div>)}</div>
+      <div className="card"><div className="lot"><span>零用包</span><b>{r.spend_balance} 點</b></div><div className="lot"><span>存錢罐（含倍率）</span><b>{r.jar} 點</b></div>{r.interest > 0 && <div className="lot"><span>利息與存入獎勵</span><b>+{r.interest}</b></div>}
+        {k?.goal && <div className="lot"><span>存錢目標 {k.goal.emoji} {k.goal.title}</span><b>{Math.min(100, Math.round((r.jar / k.goal.amount) * 100))}%</b></div>}</div>
+      <button className="btn line" onClick={() => ui.sheet(null)}>關閉</button>
+    </>}
   </>;
 }
