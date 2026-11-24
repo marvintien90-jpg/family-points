@@ -170,3 +170,8 @@ h2.sec{animation:rise .38s var(--ease-out) both}
 .la-row .grow small{display:block;color:var(--muted);font-size:12px}
 .la-row .grow{flex:1;min-width:0}
 .la-row .was{text-decoration:line-through;color:var(--muted);font-size:12px;margin-right:4px;font-weight:500}
+/* v1.5 評價快選 */
+.rate-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 12px}
+.rate-opt{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;border:1.5px solid var(--line);border-radius:16px;background:var(--surface);font-weight:700;font-size:15px}
+.rate-opt span{font-size:30px;line-height:1}
+.rate-opt:active{transform:scale(.95);border-color:var(--accent);background:var(--accent-soft)}

@@ -4,6 +4,7 @@ import { useUi } from "../ui/ui";
 import { Redemption, Task, jarTier, rpc, sb, when, scheduleText, PACKS } from "../supabase";
 import type { ParentData } from "./ParentApp";
 import { BonusSheet } from "./ParentApp";
+import { RateSheet } from "../ui/Rate";
 
 function Photo({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -13,21 +14,28 @@ function Photo({ path }: { path: string }) {
 
 export function Queue({ data }: { data: ParentData }) {
   const { me, members, family } = useStore(); const ui = useUi();
+  const isAdmin = me?.role === "admin";
   const name = (id: string) => members.find((m) => m.id === id)?.display_name ?? "";
   const kids = members.filter((m) => m.role === "child");
   const [adj, setAdj] = useState<Record<string, number>>({});
   const bonusPct = Number(family?.settings.proposal_bonus ?? 0.2);
 
-  async function approve(t: Task) {
-    const r = await ui.busy(rpc<number>("decide_task", { p_task: t.id, p_approve: true, p_points: adj[t.id] ?? null }));
+  function approve(t: Task) {
+    if (t.plan) { doApprove(t, null); return; }
+    ui.sheet(<RateSheet title={t.title} onPick={(rt) => { ui.sheet(null); doApprove(t, rt); }} />);
+  }
+  async function doApprove(t: Task, rating: string | null) {
+    const r = await ui.busy(rpc<number>("approve_task", { p_task: t.id, p_points: adj[t.id] ?? null, p_rating: rating }));
     if (r === undefined) return;
     if (t.plan) { ui.toast("已加入例行任務，可到「任務獎勵」修改"); data.reload(); return; }
     ui.toast(`已核准 +${r}`, async () => { await ui.busy(rpc("undo_task", { p_task: t.id })); ui.toast("已復原"); data.reload(); });
     data.reload();
   }
-  async function approveAll(list: Task[]) {
-    let total = 0; for (const t of list) { const r = await ui.busy(rpc<number>("decide_task", { p_task: t.id, p_approve: true })); total += r ?? 0; }
-    ui.toast(`已全部核准，共 +${total}`); data.reload();
+  function approveAll(list: Task[]) {
+    ui.sheet(<RateSheet title={`全部 ${list.length} 項`} sub="同一個評價會套用到這組每一項。" onPick={async (rt) => {
+      ui.sheet(null); let total = 0;
+      for (const t of list) { const r = await ui.busy(rpc<number>("approve_task", { p_task: t.id, p_rating: rt })); total += r ?? 0; }
+      ui.toast(`已全部核准，共 +${total}`); data.reload(); }} />);
   }
   function reject(t: Task) { ui.sheet(<RejectSheet title={t.title} onSend={async (why) => { const r = await ui.busy(rpc("decide_task", { p_task: t.id, p_approve: false, p_reason: why })); if (r !== undefined) { ui.sheet(null); ui.toast("已退回"); data.reload(); } }} />); }
   function decideRed(x: Redemption, ok: boolean) {
@@ -50,9 +58,9 @@ export function Queue({ data }: { data: ParentData }) {
     {[...routineGroups.values()].map((list) => <div className="card" key={list[0].id}>
       <div className="q-top"><span className="emo">📋</span><div className="mid"><b>{name(list[0].assignee)}的例行清單</b><small>{list.length} 項 · {when(list[list.length - 1].submitted_at ?? list[0].created_at)}</small></div><span className="cost">+{list.reduce((a, t) => a + t.points, 0)}</span></div>
       {list.map((t) => <div key={t.id}>
-        <div className="lot"><span>{t.emoji} {t.title} <span className="cost" style={{ fontSize: 14 }}>+{t.points}</span></span><span className="row" style={{ flexWrap: "nowrap" }}><button className="btn line sm" onClick={() => reject(t)}>退回</button><button className="btn good sm" onClick={() => approve(t)}>核准</button></span></div>
+        <div className="lot"><span>{t.emoji} {t.title} <span className="cost" style={{ fontSize: 14 }}>+{t.points}</span></span>{isAdmin ? <span className="row" style={{ flexWrap: "nowrap" }}><button className="btn line sm" onClick={() => reject(t)}>退回</button><button className="btn good sm" onClick={() => approve(t)}>核准</button></span> : <small className="hint">等管理員審核</small>}</div>
         {t.photo_path && <Photo path={t.photo_path} />}</div>)}
-      {list.length > 1 && <button className="btn good" onClick={() => approveAll(list)}>全部核准</button>}
+      {isAdmin && list.length > 1 && <button className="btn good" onClick={() => approveAll(list)}>全部核准</button>}
     </div>)}
     {others.map((t) => <div className="card" key={t.id}>
       <div className="q-top"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b><small>{name(t.assignee)} · {t.plan ? "想加入每日例行" : t.kind === "proposal" ? "主動提案" : "交辦"} · {when(t.submitted_at ?? t.created_at)}</small></div>

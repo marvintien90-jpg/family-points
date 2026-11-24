@@ -73,7 +73,7 @@ function TaskRow({ t, picked, onClick }: { t: Task; picked: boolean; onClick: ()
   const cls = t.status === "approved" ? "ok" : t.status === "submitted" ? "sub" : picked ? "done" : "";
   return <button className={`item ${cls}`} onClick={onClick} aria-pressed={picked} aria-disabled={t.status === "submitted" || t.status === "approved"}>
     <span className="chk" /><span className="emo">{t.emoji}</span>
-    <span className="t">{t.title}{t.due_at && <span className="when-tag">⏰ {timeOf(t.due_at)} 前</span>}{t.status === "submitted" && <small>等待核准</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
+    <span className="t">{t.title}{t.due_at && <span className="when-tag">⏰ {timeOf(t.due_at)} 前</span>}{t.status === "submitted" && <small>等待核准</small>}{t.status === "approved" && t.rating && <small>評價：{t.rating}</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
     <span className="p">+{t.points}</span>
   </button>;
 }

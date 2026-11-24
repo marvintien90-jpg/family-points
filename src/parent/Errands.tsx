@@ -4,6 +4,7 @@ import { EmojiPick, useUi } from "../ui/ui";
 import { SwipeAction, SwipeRow } from "../ui/Swipe";
 import { Task, dueText, rpc, sb, when } from "../supabase";
 import { RejectSheet } from "./Queue";
+import { RateSheet } from "../ui/Rate";
 import { DuePick, twDefault, twToIso } from "../ui/Schedule";
 
 export function Errands() {
@@ -21,7 +22,7 @@ export function Errands() {
   const actions = (t: Task): { left?: SwipeAction; right?: SwipeAction; more: SwipeAction[] } => {
     const cancel: SwipeAction = { label: "取消交辦", icon: "🗑️", tone: "bad", run: () => confirmCancel(t) };
     const reopen: SwipeAction = { label: "重審", icon: "🔁", tone: "gold", run: () => ui.sheet(<ReopenSheet t={t} onDone={() => after("已打回重做，對方會收到通知")} />) };
-    const approve: SwipeAction = { label: "核准", icon: "✅", tone: "good", run: async () => { const r = await ui.busy(rpc<number>("decide_task", { p_task: t.id, p_approve: true })); if (r !== undefined) after(r ? `已核准 +${r}` : "已核准"); } };
+    const approve: SwipeAction = { label: "核准", icon: "✅", tone: "good", run: () => ui.sheet(<RateSheet title={t.title} onPick={async (rt) => { ui.sheet(null); const r = await ui.busy(rpc<number>("approve_task", { p_task: t.id, p_rating: rt })); if (r !== undefined) after(r ? `已核准 +${r}` : "已核准"); }} />) };
     const reject: SwipeAction = { label: "退回", icon: "↩️", tone: "bad", run: () => ui.sheet(<RejectSheet title={t.title} onSend={async (why) => { const r = await ui.busy(rpc("decide_task", { p_task: t.id, p_approve: false, p_reason: why })); if (r !== undefined) { ui.sheet(null); after("已退回"); } }} />) };
     const finish: SwipeAction = { label: "我完成了", icon: "✅", tone: "good", run: async () => { const r = await ui.busy(rpc("complete_own_errand", { p_task: t.id })); if (r !== undefined) after("完成了"); } };
     const ack: SwipeAction = { label: "收到", icon: "📬", tone: "acc", run: async () => { const r = await ui.busy(rpc("ack_errand", { p_task: t.id })); if (r !== undefined) after("已確認收到"); } };

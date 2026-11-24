@@ -5,6 +5,13 @@ import { useUi } from "./ui/ui";
 
 const EARN = ["task", "pack", "bonus", "interest", "deposit_bonus", "undo", "adjust"];
 const EDITABLE = ["task", "pack", "bonus"];
+// 這筆紀錄目前實際有效的點數（任務類含撤銷、修改；激勵只看修改）
+const isPack = (l: Ledger) => l.ref_type === "pack" || l.reason.endsWith("全勤獎");
+export function netOf(rows: Ledger[], l: Ledger) {
+  if (l.ref_id && (l.ref_type === "task" || l.ref_type === "pack"))
+    return rows.filter((x) => x.ref_id === l.ref_id && x.account === "spend" && ["task", "pack", "undo", "adjust"].includes(x.ref_type ?? "") && isPack(x) === isPack(l)).reduce((a, x) => a + x.amount, 0);
+  return l.amount + rows.filter((x) => x.ref_ledger === l.id).reduce((a, x) => a + x.amount, 0);
+}
 const dayTW = (iso: string | Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date(iso));
 const pretty = (d: string) => { const t = dayTW(new Date()), y = dayTW(new Date(Date.now() - 864e5)); if (d === t) return "今天"; if (d === y) return "昨天"; const x = new Date(d + "T12:00:00+08:00"); return x.toLocaleDateString("zh-TW", { month: "numeric", day: "numeric", weekday: "short" }); };
 const icon = (l: Ledger) => l.ref_type === "pack" ? "🏅" : l.ref_type === "bonus" ? "⭐" : l.ref_type === "interest" ? "🪙" : l.ref_type === "redeem" ? "🎁" : l.ref_type === "refund" ? "↩️" : l.ref_type === "undo" || l.ref_type === "adjust" ? "⏪" : l.ref_type?.startsWith("deposit") ? "🫙" : l.ref_type === "withdraw" ? "🫙" : "✅";
@@ -63,8 +70,9 @@ export function History() {
   const adjOf = new Map<number, number>();
   (data?.ledger ?? []).forEach((l) => { if (l.ref_ledger) adjOf.set(l.ref_ledger, (adjOf.get(l.ref_ledger) ?? 0) + l.amount); });
   const V = L.filter((l) => !l.ref_ledger);
+  const rateOf = new Map<string, string>(); (data?.tasks ?? []).forEach((t) => { if (t.rating) rateOf.set(t.id, t.rating); });
   const canEdit = (l: Ledger) => isAdmin && l.account === "spend" && EDITABLE.includes(l.ref_type ?? "");
-  const openEdit = (l: Ledger) => ui.sheet(<EditSheet l={l} now={l.amount + (adjOf.get(l.id) ?? 0)} onDone={() => { ui.sheet(null); setReload((x) => x + 1); }} />);
+  const openEdit = (l: Ledger) => ui.sheet(<EditSheet l={l} now={netOf(data?.ledger ?? [], l)} onDone={() => { ui.sheet(null); setReload((x) => x + 1); }} />);
   const groups = new Map<string, Ledger[]>();
   V.slice(0, limit).forEach((l) => { const d = dayTW(l.created_at); groups.set(d, [...(groups.get(d) ?? []), l]); });
   const kidName = members.find((m) => m.id === who)?.display_name ?? "";
@@ -95,7 +103,7 @@ export function History() {
         [...groups.entries()].map(([d, list]) => { const sum = list.filter((l) => EARN.includes(l.ref_type ?? "")).reduce((a, l) => a + l.amount + (adjOf.get(l.id) ?? 0), 0);
           return <div className="card tl" key={d}><div className="pack-head"><b>{pretty(d)}</b><small>{sum ? `賺 +${sum}` : ""}</small></div>
             {list.map((l) => { const adj = adjOf.get(l.id); const amt = l.amount + (adj ?? 0); const ed = canEdit(l);
-              const inner = <><span className="tl-ic">{icon(l)}</span><div className="grow">{l.reason}<small>{new Date(l.created_at).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false })} · {l.account === "jar" ? "存錢罐" : "零用包"}{adj ? (amt === 0 ? " · 已刪除" : " · 已修改") : ""}{ed ? " · ✏️" : ""}</small></div><span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></>;
+              const inner = <><span className="tl-ic">{icon(l)}</span><div className="grow">{l.reason}<small>{new Date(l.created_at).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false })} · {l.account === "jar" ? "存錢罐" : "零用包"}{adj ? (amt === 0 ? " · 已刪除" : " · 已修改") : ""}{l.ref_id && rateOf.get(l.ref_id) && l.ref_type === "task" ? ` · ${rateOf.get(l.ref_id)}` : ""}{ed ? " · ✏️" : ""}</small></div><span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></>;
               const cls = `tl-row${ed ? " editable" : ""}${adj && amt === 0 ? " gone" : ""}`;
               return ed ? <button type="button" className={cls} key={l.id} onClick={() => openEdit(l)} style={{ width: "100%", textAlign: "left" }}>{inner}</button> : <div className={cls} key={l.id}>{inner}</div>; })}</div>; })}
       {V.length > limit && <button className="btn line" onClick={() => setLimit(limit + 60)}>看更早的紀錄</button>}
@@ -148,7 +156,7 @@ export function LedgerAdmin() {
   const ok = (l: Ledger) => l.account === "spend" && EDITABLE.includes(l.ref_type ?? "");
   const list = (rows ?? []).filter((l) => !l.ref_ledger && (!only || ok(l)));
   const kidName = (id: string) => members.find((m) => m.id === id);
-  const open = (l: Ledger) => ui.sheet(<EditSheet l={l} now={l.amount + (adjOf.get(l.id) ?? 0)} onDone={() => ui.sheet(<LedgerAdmin />)} />);
+  const open = (l: Ledger) => ui.sheet(<EditSheet l={l} now={netOf(rows ?? [], l)} onDone={() => ui.sheet(<LedgerAdmin />)} />);
   return <>
     <h3>點數紀錄後台</h3>
     <p>點一筆就能撤銷誤按的通過、改點數或刪除。原本的紀錄會保留並標示，孩子會收到通知。</p>

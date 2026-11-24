@@ -9,7 +9,7 @@ export interface Task {
   id: string; kind: "routine" | "proposal" | "errand"; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null;
   photo: "none" | "optional" | "required"; assignee: string; created_by: string | null; for_date: string | null; due_at: string | null;
   status: "todo" | "submitted" | "approved" | "rejected" | "void"; photo_path: string | null; reject_reason: string | null;
-  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null; ack_at?: string | null; plan?: Plan | null;
+  submitted_at: string | null; decided_at: string | null; created_at: string; template_id: string | null; ack_at?: string | null; plan?: Plan | null; rating?: string | null;
 }
 export interface Plan { days?: number[]; dates?: string[]; at_time?: string | null; pack?: string | null }
 export interface Template { id: string; assignee: string; title: string; emoji: string; points: number; pack: "am" | "pm" | "bed" | null; days: number[]; dates?: string[]; at_time?: string | null; photo: "none" | "optional" | "required"; active: boolean; sort: number }
