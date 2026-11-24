@@ -58,7 +58,7 @@ export function Queue({ data }: { data: ParentData }) {
       <div className="q-top"><span className="emo">{t.emoji}</span><div className="mid"><b>{t.title}</b><small>{name(t.assignee)} · {t.plan ? "想加入每日例行" : t.kind === "proposal" ? "主動提案" : "交辦"} · {when(t.submitted_at ?? t.created_at)}</small></div>
         <span className="cost">{t.plan ? `每次 +${adj[t.id] ?? t.points}` : `+${t.kind === "proposal" ? Math.round((adj[t.id] ?? t.points) * (1 + bonusPct)) : adj[t.id] ?? t.points}`}</span></div>
       {t.plan && <><div className="plan-box">📅 {scheduleText(t.plan)}{t.plan.pack && PACKS[t.plan.pack] ? ` · ${PACKS[t.plan.pack].icon} ${PACKS[t.plan.pack].name}` : ""}<br /><small className="hint">核准後會變成例行任務，之後每次做完一樣要你核准才給點。</small></div>
-        <label className="field">每次點數 {adj[t.id] ?? t.points}<input type="range" min={1} max={50} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label></>}
+        <label className="field">每次點數 {adj[t.id] ?? t.points}<input type="range" min={1} max={100} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label></>}
       {t.kind === "proposal" && !t.plan && <label className="field">核准點數 {adj[t.id] ?? t.points}（另加主動加成 {Math.round(bonusPct * 100)}%）<input type="range" min={5} max={200} step={5} value={adj[t.id] ?? t.points} onChange={(e) => setAdj({ ...adj, [t.id]: +e.target.value })} /></label>}
       {t.photo_path && <Photo path={t.photo_path} />}
       <div className="row"><button className="btn line sm" onClick={() => reject(t)}>退回</button><button className="btn good sm" onClick={() => approve(t)}>{t.plan ? "核准加入例行" : "核准"}</button></div>

@@ -21,7 +21,7 @@ export function SchedulePick({ value, onChange, idp = "s" }: { value: Sched; onC
       : <div className="field">日期（可以加好幾天，例如考試日、生日）
         <div className="date-add"><input type="date" id={`${idp}-date`} value={pick} min={todayTW()} onChange={(e) => setPick(e.target.value)} /><button type="button" className="btn sm" onClick={() => addDate(pick)}>加入</button></div>
         <div className="row">{value.dates.length === 0 ? <small className="hint">還沒加日期</small> : value.dates.map((d) => <button type="button" key={d} className="chip on" onClick={() => set({ dates: value.dates.filter((x) => x !== d) })} aria-label={`移除 ${d}`}>{prettyDate(d)} ✕</button>)}</div></div>}
-    <div className="field">時間點（選填，前 15 分鐘提醒）
+    <div className="field">完成時間（選填，幾點前要做完；前 15 分鐘提醒）
       <div className="date-add"><input type="time" id={`${idp}-time`} value={value.at_time} onChange={(e) => set({ at_time: e.target.value })} />{value.at_time && <button type="button" className="btn sm line" onClick={() => set({ at_time: "" })}>不設時間</button>}</div>
       <div className="row">{["07:00", "12:00", "17:30", "20:00", "21:00"].map((t) => <button type="button" key={t} className={`chip ${value.at_time === t ? "on" : ""}`} onClick={() => set({ at_time: t })}>{t}</button>)}</div>
     </div>

@@ -71,3 +71,7 @@ export function scheduleText(p: { days?: number[]; dates?: string[]; at_time?: s
   return when + (p.at_time ? ` ${hm(p.at_time)}` : "");
 }
 export const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }) : "");
+
+// 時段完成時間：管理員可以在設定改，預設 早上 07:30、放學後 18:00、睡前 21:00
+export const PACK_DEFAULT: Record<string, string> = { am: "07:30", pm: "18:00", bed: "21:00" };
+export const packTime = (settings: Record<string, number | string> | undefined, pk: string) => `${String(settings?.[`pack_${pk}`] ?? PACK_DEFAULT[pk] ?? "")} 前`;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Task, dueText, rpc, sb, scheduleText, timeOf } from "../supabase";
+import { PACKS, Task, dueText, packTime, rpc, sb, scheduleText, timeOf } from "../supabase";
 import { SchedulePick, Sched } from "../ui/Schedule";
 import type { KidData } from "./KidApp";
 
@@ -42,7 +42,7 @@ export function Today({ data }: { data: KidData }) {
       const items = routines.filter((t) => t.pack === pk); if (!items.length) return null;
       const sel = items.filter((t) => picked.has(t.id)); const done = items.filter((t) => t.status === "submitted" || t.status === "approved").length;
       return <div className="card" key={pk}>
-        <div className="pack-head"><b>{PACKS[pk].icon} {PACKS[pk].name}</b><small>{done === items.length && items.every((t) => t.status === "approved") ? "全部完成 🎉" : `${PACKS[pk].time} · ${done}/${items.length}`}</small></div>
+        <div className="pack-head"><b>{PACKS[pk].icon} {PACKS[pk].name}</b><small>{done === items.length && items.every((t) => t.status === "approved") ? "全部完成 🎉" : `${packTime(family?.settings, pk)} · ${done}/${items.length}`}</small></div>
         {items.map((t) => <TaskRow key={t.id} t={t} picked={picked.has(t.id)} onClick={() => toggle(t)} />)}
         {sel.length > 0 && <button className="btn" onClick={() => submit(sel.map((t) => t.id))}>提交 {sel.length} 項給爸媽</button>}
       </div>;
@@ -73,7 +73,7 @@ function TaskRow({ t, picked, onClick }: { t: Task; picked: boolean; onClick: ()
   const cls = t.status === "approved" ? "ok" : t.status === "submitted" ? "sub" : picked ? "done" : "";
   return <button className={`item ${cls}`} onClick={onClick} aria-pressed={picked} aria-disabled={t.status === "submitted" || t.status === "approved"}>
     <span className="chk" /><span className="emo">{t.emoji}</span>
-    <span className="t">{t.title}{t.due_at && <span className="when-tag">⏰ {timeOf(t.due_at)}</span>}{t.status === "submitted" && <small>等待核准</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
+    <span className="t">{t.title}{t.due_at && <span className="when-tag">⏰ {timeOf(t.due_at)} 前</span>}{t.status === "submitted" && <small>等待核准</small>}{t.status === "rejected" && <small className="bad">退回：{t.reject_reason}</small>}{t.photo === "required" && t.status === "todo" && <small>📷 需要拍照</small>}</span>
     <span className="p">+{t.points}</span>
   </button>;
 }
@@ -110,7 +110,7 @@ function ProposeSheet({ onDone }: { onDone: () => void }) {
     <label className="field">要做什麼<input type="text" id="p-title" maxLength={30} placeholder={routine ? "例如：每天練琴 20 分鐘" : "例如：幫忙洗碗一週"} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     <EmojiPick value={emoji} onChange={setEmoji} />
     {routine ? <>
-      <label className="field">每次建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={1} max={30} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
+      <label className="field">每次建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={1} max={100} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>
       <div className="field">時段<div className="row">{Object.entries(PACKS).map(([k, p]) => <button key={k} className={`chip ${plan.pack === k ? "on" : ""}`} onClick={() => setPlan({ ...plan, pack: k })}>{p.icon} {p.name}</button>)}</div></div>
       <SchedulePick idp="p" value={plan} onChange={(v) => setPlan({ ...plan, ...v })} />
     </> : <label className="field">建議點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" id="p-pts" min={5} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>}

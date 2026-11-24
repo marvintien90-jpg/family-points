@@ -123,9 +123,42 @@ function EditSheet({ l, now, onDone }: { l: Ledger; now: number; onDone: () => v
       <small className="hint">點數（含全勤獎）會自動收回，任務回到孩子的清單，做完再送一次。</small>
     </div>}
     <label className="field">改成幾點<input type="text" id="ed-pts" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pts} onChange={(e) => setPts(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} /></label>
-    <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button><button className="btn" disabled={pts === "" || Number(pts) === now || Number(pts) > 1000} onClick={() => save(Number(pts))}>儲存點數</button></div>
+    <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button><button className="btn" disabled={pts === "" || Number(pts) === now || Number(pts) > 5000} onClick={() => save(Number(pts))}>儲存點數</button></div>
     <div className="danger-zone">{!sure ? <div className="row">{canRedo && <button className="btn line" onClick={() => setSure("void")}>🚫 作廢這個任務</button>}{now !== 0 && <button className="btn line" onClick={() => setSure("del")}>🗑️ 刪除這筆點數</button>}</div> :
       <><div className="warn">{sure === "void" ? "作廢後這項不算、也不用再做，點數會收回。" : `會把這筆 ${now} 點收回，紀錄會保留並標示「已刪除」。`}孩子會收到通知。</div>
         <div className="row"><button className="btn line" onClick={() => setSure("")}>先不要</button><button className="btn bad" onClick={() => (sure === "void" ? redo("void") : save(0))}>{sure === "void" ? "確定作廢" : "確定刪除"}</button></div></>}</div>
+  </>;
+}
+
+// 設定 → 點數紀錄後台：所有孩子的點數紀錄，管理員可以調整或刪除
+export function LedgerAdmin() {
+  const { members } = useStore(); const ui = useUi();
+  const kids = members.filter((m) => m.role === "child");
+  const [who, setWho] = useState<string>("all");
+  const [rows, setRows] = useState<Ledger[] | null>(null);
+  const [only, setOnly] = useState(true);
+  useEffect(() => {
+    setRows(null);
+    let q = sb.from("ledger").select("*").order("created_at", { ascending: false }).limit(400);
+    if (who !== "all") q = q.eq("member_id", who);
+    q.then(({ data }) => setRows((data ?? []) as Ledger[]));
+  }, [who]);
+  const adjOf = new Map<number, number>();
+  (rows ?? []).forEach((l) => { if (l.ref_ledger) adjOf.set(l.ref_ledger, (adjOf.get(l.ref_ledger) ?? 0) + l.amount); });
+  const ok = (l: Ledger) => l.account === "spend" && EDITABLE.includes(l.ref_type ?? "");
+  const list = (rows ?? []).filter((l) => !l.ref_ledger && (!only || ok(l)));
+  const kidName = (id: string) => members.find((m) => m.id === id);
+  const open = (l: Ledger) => ui.sheet(<EditSheet l={l} now={l.amount + (adjOf.get(l.id) ?? 0)} onDone={() => ui.sheet(<LedgerAdmin />)} />);
+  return <>
+    <h3>點數紀錄後台</h3>
+    <p>點一筆就能撤銷誤按的通過、改點數或刪除。原本的紀錄會保留並標示，孩子會收到通知。</p>
+    {kids.length > 1 && <div className="row"><button className={`chip ${who === "all" ? "on" : ""}`} onClick={() => setWho("all")}>全部</button>{kids.map((k) => <button key={k.id} className={`chip ${who === k.id ? "on" : ""}`} onClick={() => setWho(k.id)}>{k.avatar} {k.display_name}</button>)}</div>}
+    <div className="seg"><button className={only ? "on" : ""} onClick={() => setOnly(true)}>可調整的</button><button className={!only ? "on" : ""} onClick={() => setOnly(false)}>全部紀錄</button></div>
+    {!rows ? <div className="spinner" /> : list.length === 0 ? <div className="card empty">沒有紀錄</div> :
+      <div className="la-list">{list.map((l) => { const adj = adjOf.get(l.id); const amt = l.amount + (adj ?? 0); const k = kidName(l.member_id);
+        return <button type="button" key={l.id} className="la-row" disabled={!ok(l)} onClick={() => open(l)}>
+          <span className="tl-ic">{icon(l)}</span>
+          <div className="grow">{l.reason}<small>{kids.length > 1 && k ? `${k.avatar} ${k.display_name} · ` : ""}{new Date(l.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}{adj ? (amt === 0 ? " · 已刪除" : " · 已修改") : ""}{ok(l) ? " · ✏️" : l.account === "jar" ? " · 存錢罐（不能改）" : l.ref_type === "redeem" || l.ref_type === "refund" ? " · 兌換（到待辦處理）" : ""}</small></div>
+          <span className={amt >= 0 ? "plus" : "minus"}>{adj ? <span className="was">{l.amount}</span> : null}{amt >= 0 ? "+" : ""}{amt}</span></button>; })}</div>}
   </>;
 }

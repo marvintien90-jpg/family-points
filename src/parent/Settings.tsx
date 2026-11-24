@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { useUi } from "../ui/ui";
-import { Member, Role, adminCall, rpc, sb } from "../supabase";
+import { Member, PACKS, PACK_DEFAULT, Role, adminCall, rpc, sb } from "../supabase";
+import { VERSION, CHANGELOG } from "../changelog";
+import { LedgerAdmin } from "../History";
 import { enablePush, isIOS, isStandalone, pushPermission } from "../push";
 
 const ROLE: Record<Role, string> = { admin: "管理員", parent: "家長（操作者）", child: "孩子", guest: "訪客" };
@@ -40,20 +42,28 @@ export function Settings() {
       <button className="link" onClick={() => ui.sheet(<><h3>各身份可以做什麼</h3>{(["admin", "parent", "guest", "child"] as Role[]).map((r) => <div className="card" key={r}><b>{ROLE[r]}</b><p>{ROLE_CAN[r]}</p></div>)}</>)}>各身份可以做什麼？</button>
     </div>
 
+    {isAdmin && <><h2 className="sec">點數紀錄後台<small>只有管理員</small></h2>
+      <div className="card"><p style={{ margin: 0, fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>誤按入點、點數給錯？這裡列出所有孩子的點數紀錄，可以撤銷通過、改點數或刪除。</p>
+        <button className="btn ghost" onClick={() => ui.sheet(<LedgerAdmin />)}>🧾 調整點數紀錄</button></div></>}
+
     {isAdmin && <Rules />}
 
     <h2 className="sec">我的資料</h2>
     <div className="card"><button className="btn line" onClick={() => ui.sheet(<ProfileSheet />)}>修改稱呼和頭像</button><button className="btn line" onClick={() => sb.auth.signOut()}>登出</button></div>
-    <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 12 }}>家庭點點樂 v1.0 · 資料存在雲端，筆電關機也照常運作</p>
+    <h2 className="sec">版本與優化紀錄</h2>
+    <div className="card"><div className="set-row"><div>目前版本<small>{CHANGELOG[0].date} 更新</small></div><b className="ver">v{VERSION}</b></div>
+      <button className="btn line" onClick={() => ui.sheet(<ChangelogSheet />)}>📝 看優化紀錄</button></div>
+    <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 12 }}>家庭點點樂 v{VERSION} · 資料存在雲端，筆電關機也照常運作</p>
   </>;
 }
 
 function Rules() {
   const { family, refresh } = useStore(); const ui = useUi(); const s = family?.settings ?? {};
-  const [f, setF] = useState({ deposit_bonus: Number(s.deposit_bonus ?? 0.05) * 100, interest_rate: Number(s.interest_rate ?? 0.02) * 100, interest_cap: Number(s.interest_cap ?? 30), proposal_bonus: Number(s.proposal_bonus ?? 0.2) * 100, proposal_daily_limit: Number(s.proposal_daily_limit ?? 3), pack_bonus: Number(s.pack_bonus ?? 10), quiet_start: String(s.quiet_start ?? "21:30"), quiet_end: String(s.quiet_end ?? "07:00") });
+  const [f, setF] = useState({ deposit_bonus: Number(s.deposit_bonus ?? 0.05) * 100, interest_rate: Number(s.interest_rate ?? 0.02) * 100, interest_cap: Number(s.interest_cap ?? 30), proposal_bonus: Number(s.proposal_bonus ?? 0.2) * 100, proposal_daily_limit: Number(s.proposal_daily_limit ?? 3), pack_bonus: Number(s.pack_bonus ?? 10), pack_am: String(s.pack_am ?? PACK_DEFAULT.am), pack_pm: String(s.pack_pm ?? PACK_DEFAULT.pm), pack_bed: String(s.pack_bed ?? PACK_DEFAULT.bed), quiet_start: String(s.quiet_start ?? "21:30"), quiet_end: String(s.quiet_end ?? "07:00") });
   const num = (k: keyof typeof f, label: string, unit: string) => <label className="field">{label}<input type="text" inputMode="decimal" id={`rule-${k}`} value={String(f[k])} onChange={(e) => setF({ ...f, [k]: e.target.value.replace(/[^\d.]/g, "") as unknown as number })} /><small>{unit}</small></label>;
   return <><h2 className="sec">點數規則<small>只有管理員能改</small></h2>
     <div className="card">
+      <div className="field">例行任務各時段的完成時間<div className="row">{(["am", "pm", "bed"] as const).map((k) => <label key={k} className="field" style={{ flex: 1, minWidth: 96 }}>{PACKS[k].icon} {PACKS[k].name}<input type="time" id={`pack-${k}`} value={f[`pack_${k}`]} onChange={(e) => setF({ ...f, [`pack_${k}`]: e.target.value })} /></label>)}</div><small>孩子的清單會顯示「幾點前完成」。單一任務要不同時間，到「任務獎勵」點那個任務設定完成時間。</small></div>
       {num("pack_bonus", "一組例行全部完成的全勤獎", "點")}
       {num("proposal_bonus", "主動提案加成", "%")}
       {num("proposal_daily_limit", "每天最多提案", "次")}
@@ -101,4 +111,13 @@ function ProfileSheet() {
     <label className="field">稱呼<input type="text" id="me-name" value={name} onChange={(e) => setName(e.target.value)} /></label>
     <div className="emoji-grid">{AVATARS.map((a) => <button key={a} className={av === a ? "on" : ""} onClick={() => setAv(a)}>{a}</button>)}</div>
     <button className="btn" onClick={async () => { const r = await ui.busy(rpc("update_profile", { p_name: name, p_avatar: av })); if (r !== undefined) { ui.sheet(null); refresh(); } }}>儲存</button></>;
+}
+
+function ChangelogSheet() {
+  return <>
+    <h3>優化紀錄</h3>
+    <div className="changelog">{CHANGELOG.map((c, i) => <div className={`cl ${i === 0 ? "now" : ""}`} key={c.v}>
+      <div className="cl-head"><b>v{c.v}</b><small>{c.date}{i === 0 ? " · 目前版本" : ""}</small></div>
+      <ul>{c.items.map((x) => <li key={x}>{x}</li>)}</ul></div>)}</div>
+  </>;
 }

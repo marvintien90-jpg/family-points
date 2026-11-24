@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { EmojiPick, useUi } from "../ui/ui";
-import { PACKS, Reward, TIER, Template, rpc, sb, scheduleText } from "../supabase";
+import { PACKS, Reward, TIER, Template, packTime, rpc, sb, scheduleText } from "../supabase";
 import { SchedulePick } from "../ui/Schedule";
 
 
 export function Manage() {
-  const { members, tick, refresh } = useStore(); const ui = useUi();
+  const { members, family, tick, refresh } = useStore(); const ui = useUi();
   const [tpls, setTpls] = useState<Template[]>([]); const [rews, setRews] = useState<Reward[]>([]);
   useEffect(() => {
     sb.from("task_templates").select("*").order("sort").order("created_at").then(({ data }) => setTpls((data ?? []) as Template[]));
@@ -22,7 +22,7 @@ export function Manage() {
     {kids.length === 0 && <div className="card empty">先到「設定 → 家庭成員」新增孩子帳號，預設任務會自動建立。</div>}
     {([...Object.keys(PACKS), ""] as string[]).map((pk) => {
       const list = tpls.filter((t) => (t.pack ?? "") === pk); if (!list.length) return null;
-      return <div className="card" key={pk || "none"}><div className="pack-head"><b>{pk ? `${PACKS[pk].icon} ${PACKS[pk].name}` : "其他"}</b><small>{pk ? PACKS[pk].time : ""}</small></div>
+      return <div className="card" key={pk || "none"}><div className="pack-head"><b>{pk ? `${PACKS[pk].icon} ${PACKS[pk].name}` : "其他"}</b><small>{pk ? `${packTime(family?.settings, pk)}完成` : ""}</small></div>
         {list.map((t) => <button className="rew" key={t.id} style={{ textAlign: "left", opacity: t.active ? 1 : 0.45 }} onClick={() => editT(t)}><span className="emo" style={{ width: 40, height: 40, fontSize: 22 }}>{t.emoji}</span>
           <div className="mid"><b>{t.title}</b><small>{kids.length > 1 ? name(t.assignee) + " · " : ""}{scheduleText(t)}{t.photo === "required" ? " · 需拍照" : t.photo === "optional" ? " · 可拍照" : ""}{t.active ? "" : " · 已停用"}</small></div><span className="cost">+{t.points}</span></button>)}</div>;
     })}
@@ -51,7 +51,7 @@ function TemplateSheet({ t, onDone }: { t?: Template; onDone: () => void }) {
     <h3>{t ? "修改例行任務" : "新增例行任務"}</h3>
     <label className="field">任務名稱<input type="text" id="t-title" maxLength={30} value={f.title} onChange={(e) => set({ title: e.target.value })} /></label>
     {kids.length > 1 && <div className="row">{kids.map((k) => <button key={k.id} className={`chip ${f.assignee === k.id ? "on" : ""}`} onClick={() => set({ assignee: k.id })}>{k.avatar} {k.display_name}</button>)}</div>}
-    <label className="field">點數：<b style={{ color: "var(--gold)" }}>{f.points}</b><input type="range" min={1} max={50} value={f.points} onChange={(e) => set({ points: +e.target.value })} /></label>
+    <label className="field">點數：<b style={{ color: "var(--gold)" }}>{f.points}</b><input type="range" min={1} max={100} value={f.points} onChange={(e) => set({ points: +e.target.value })} /></label>
     <div className="field">時段<div className="row">{Object.entries(PACKS).map(([k, p]) => <button key={k} className={`chip ${f.pack === k ? "on" : ""}`} onClick={() => set({ pack: k as Template["pack"] })}>{p.icon} {p.name}</button>)}</div></div>
     <SchedulePick idp="t" value={{ days: f.days, dates: f.dates, at_time: f.at_time }} onChange={(v) => set(v)} />
     <div className="field">照片<div className="row">{([["none", "不需要"], ["optional", "可附"], ["required", "必須"]] as const).map(([k, l]) => <button key={k} className={`chip ${f.photo === k ? "on" : ""}`} onClick={() => set({ photo: k })}>{l}</button>)}</div></div>

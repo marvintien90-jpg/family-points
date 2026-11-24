@@ -78,16 +78,18 @@ export function ErrandSheet() {
   const { members, refresh } = useStore(); const ui = useUi();
   const people = members.filter((m) => m.role !== "guest");
   const [title, setTitle] = useState(""); const [emoji, setEmoji] = useState("📌"); const [who, setWho] = useState(people.find((m) => m.role === "child")?.id ?? people[0]?.id);
-  const [due, setDue] = useState(twDefault(1, "20:00")); const [pts, setPts] = useState(10);
+  const [due, setDue] = useState(twDefault(1, "20:00")); const [pts, setPts] = useState("10");
   const isKid = members.find((m) => m.id === who)?.role === "child";
   return <>
     <h3>交辦家庭事項</h3>
     <label className="field">事項<input type="text" id="e-title" maxLength={40} placeholder="例如：週六前繳午餐費" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     <div className="row">{people.map((m) => <button key={m.id} className={`chip ${who === m.id ? "on" : ""}`} onClick={() => setWho(m.id)}>{m.avatar} {m.display_name}</button>)}</div>
     <DuePick value={due} onChange={setDue} />
-    {isKid && <label className="field">完成可得點數：<b style={{ color: "var(--gold)" }}>{pts}</b><input type="range" min={0} max={100} step={5} value={pts} onChange={(e) => setPts(+e.target.value)} /></label>}
+    {isKid && <><label className="field">完成可得點數（0 到 5000）<input type="text" id="e-pts" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pts} onChange={(e) => setPts(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} /></label>
+      <div className="row">{[10, 50, 100, 500, 1000, 5000].map((n) => <button key={n} className={`chip ${pts === String(n) ? "on" : ""}`} onClick={() => setPts(String(n))}>{n}</button>)}</div>
+      {Number(pts) > 5000 && <div className="warn">交辦獎勵最多 5000 點</div>}</>}
     <EmojiPick value={emoji} onChange={setEmoji} />
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button>
-      <button className="btn" disabled={!title.trim()} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: twToIso(due), p_points: isKid ? pts : 0 })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
+      <button className="btn" disabled={!title.trim() || (isKid && Number(pts) > 5000)} onClick={async () => { const r = await ui.busy(rpc("create_errand", { p_title: title, p_emoji: emoji, p_assignee: who, p_due: twToIso(due), p_points: isKid ? Number(pts) || 0 : 0 })); if (r !== undefined) { ui.sheet(null); ui.toast("已交辦，對方會收到通知"); refresh(); } }}>交辦</button></div>
   </>;
 }
