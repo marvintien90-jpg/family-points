@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { useUi } from "../ui/ui";
-import { Redemption, Task, jarTier, rpc, sb, when, scheduleText, PACKS } from "../supabase";
+import { Member, Redemption, Streak, Task, Wallet, jarTier, rpc, sb, when, scheduleText, PACKS } from "../supabase";
 import type { ParentData } from "./ParentApp";
 import { BonusSheet } from "./ParentApp";
 import { RateSheet } from "../ui/Rate";
@@ -50,6 +50,7 @@ export function Queue({ data }: { data: ParentData }) {
       <div className="wallets">{kids.slice(0, 2).map((k) => { const w = data.wallets[k.id]; return <div className="wallet" key={k.id}><span>{k.avatar} {k.display_name} · Lv {w?.level ?? 1}</span><span className="n">{w?.spend ?? 0}</span><span style={{ fontSize: 11.5 }}>存錢罐 {w?.jar_value ?? 0}（{jarTier(w?.best_days ?? 0)}）</span></div>; })}
         {kids.length === 0 && <div className="wallet"><span>還沒有孩子帳號</span><span style={{ fontSize: 13 }}>到設定新增</span></div>}</div>
     </div>
+    {kids.length > 0 && <div className="kid-over">{kids.map((k) => <KidOverview key={k.id} kid={k} w={data.wallets[k.id]} s={data.streaks[k.id]} />)}</div>}
     {empty && <div className="card empty"><span className="big">☕</span>都處理完了。孩子提交任務時，你的手機會收到通知。</div>}
     {[...routineGroups.values()].map((list) => <div className="card" key={list[0].id}>
       <div className="q-top"><span className="emo">📋</span><div className="mid"><b>{name(list[0].assignee)}的例行清單</b><small>{list.length} 項 · {when(list[list.length - 1].submitted_at ?? list[0].created_at)}</small></div><span className="cost">+{list.reduce((a, t) => a + t.points, 0)}</span></div>
@@ -83,4 +84,17 @@ export function RejectSheet({ title, onSend }: { title: string; onSend: (why: st
     {why === "其他" && <label className="field">原因<input type="text" id="rj-other" value={other} onChange={(e) => setOther(e.target.value)} maxLength={40} /></label>}
     <div className="row"><button className="btn line" onClick={() => ui.sheet(null)}>取消</button><button className="btn bad" onClick={() => onSend(why === "其他" ? other : why)}>退回</button></div>
   </>;
+}
+
+// 每個孩子今天的狀況：例行進度、連續天數、存錢目標
+function KidOverview({ kid, w, s }: { kid: Member; w?: Wallet; s?: Streak }) {
+  const total = s?.today_total ?? 0, ok = s?.today_approved ?? 0, sub = s?.today_submitted ?? 0;
+  const pct = total ? Math.round((ok * 100) / total) : 0;
+  const g = kid.goal; const gp = g && g.amount > 0 ? Math.min(100, Math.round(((w?.jar_value ?? 0) * 100) / g.amount)) : null;
+  return <div className="card ko">
+    <div className="ko-head"><b>{kid.avatar} {kid.display_name}</b>{(s?.current ?? 0) > 0 && <span className="ko-fire">🔥 {s!.current} 天</span>}</div>
+    <div className="ko-row"><span>今天例行</span><small>{total === 0 ? "今天沒有例行" : ok === total ? "全部完成 ✅" : `${ok}/${total}${sub ? ` · ${sub} 項等你審` : ""}`}</small></div>
+    {total > 0 && <div className="goal-bar"><i style={{ width: `${pct}%` }} /></div>}
+    {g && gp !== null && <div className="ko-row"><span>{g.emoji} {g.title}</span><small>{gp}%</small></div>}
+  </div>;
 }

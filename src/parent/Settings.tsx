@@ -47,7 +47,6 @@ export function Settings() {
         <button className="btn ghost" onClick={() => ui.sheet(<LedgerAdmin />)}>🧾 調整點數紀錄</button></div></>}
 
     {isAdmin && <Rules />}
-    {isAdmin && <LineSetup />}
 
     <h2 className="sec">我的資料</h2>
     <div className="card"><button className="btn line" onClick={() => ui.sheet(<ProfileSheet />)}>修改稱呼和頭像</button><button className="btn line" onClick={() => sb.auth.signOut()}>登出</button></div>
@@ -79,7 +78,7 @@ function Rules() {
       <div className="rule-group"><b>⚠️ 扣點</b><small>給家長的快選原因和每天上限，避免一時情緒扣太多</small>
         {num("deduct_daily_cap", "每個孩子每天最多扣", "點")}
         <label className="field">快選原因（用「、」隔開）<textarea id="rule-deduct_reasons" rows={2} value={f.deduct_reasons} onChange={(e) => setF({ ...f, deduct_reasons: e.target.value })} /></label></div>
-      {toggle("report_on", "📊 每週報告", "每週日晚上 8 點推播給家長（有綁 LINE 也會傳到群組）")}
+      {toggle("report_on", "📊 每週報告", "每週日晚上 8 點推播給家長，孩子也會收到自己的成績單")}
       <div className="row"><label className="field" style={{ flex: 1 }}>孩子安靜時段開始<input type="text" id="q-start" value={f.quiet_start} onChange={(e) => setF({ ...f, quiet_start: e.target.value })} /></label><label className="field" style={{ flex: 1 }}>結束<input type="text" id="q-end" value={f.quiet_end} onChange={(e) => setF({ ...f, quiet_end: e.target.value })} /></label></div>
       <button className="btn" onClick={async () => { const r = await ui.busy(rpc("save_settings", { p: { ...f, pack_bonus: Number(f.pack_bonus) || 0, interest_cap: Number(f.interest_cap) || 0, proposal_daily_limit: Number(f.proposal_daily_limit) || 0, streak7_bonus: Number(f.streak7_bonus) || 0, streak30_bonus: Number(f.streak30_bonus) || 0, deduct_daily_cap: Number(f.deduct_daily_cap) || 0, deduct_reasons: f.deduct_reasons.trim(), deposit_bonus: (Number(f.deposit_bonus) || 0) / 100, interest_rate: (Number(f.interest_rate) || 0) / 100, proposal_bonus: (Number(f.proposal_bonus) || 0) / 100 } })); if (r !== undefined) { ui.toast("規則已更新"); refresh(); } }}>儲存規則</button>
     </div></>;
@@ -130,45 +129,4 @@ function ChangelogSheet() {
       <div className="cl-head"><b>v{c.v}</b><small>{c.date}{i === 0 ? " · 目前版本" : ""}</small></div>
       <ul>{c.items.map((x) => <li key={x}>{x}</li>)}</ul></div>)}</div>
   </>;
-}
-
-// LINE 群組通知：官方帳號金鑰存在雲端保險箱，用綁定碼連到家庭群組
-const LINE_HOOK = "https://kiltwgraweoxxlaipwha.supabase.co/functions/v1/line-webhook";
-interface LineSt { has_keys: boolean; bound: boolean; bound_at: string | null; code: string | null; code_exp: string | null }
-function LineSetup() {
-  const { family, refresh } = useStore(); const ui = useUi();
-  const [st, setSt] = useState<LineSt | null>(null); const [err, setErr] = useState(false);
-  const [tok, setTok] = useState(""); const [sec, setSec] = useState(""); const [editKeys, setEditKeys] = useState(false);
-  const load = () => rpc<LineSt>("line_status").then((x) => { setSt(x); setErr(false); }).catch(() => setErr(true));
-  useEffect(() => { load(); }, []);
-  const on = Number(family?.settings.line_on ?? 1) !== 0;
-  const copy = async (t: string) => { try { await navigator.clipboard.writeText(t); ui.toast("已複製"); } catch { ui.toast(t); } };
-  return <><h2 className="sec">LINE 群組通知<small>只有管理員</small></h2>
-    <div className="card line-card">
-      {err ? <div className="warn">LINE 設定暫時讀不到，請稍後再試。</div> : !st ? <div className="spinner" /> : <>
-        <div className="steps">
-          <div className={`step ${st.has_keys ? "done" : ""}`}><span className="dot">1</span><div>填入 LINE 官方帳號的金鑰<small>LINE Developers → 你的 Messaging API channel</small></div></div>
-          <div className={`step ${st.bound ? "done" : ""}`}><span className="dot">2</span><div>把官方帳號加進家庭群組，輸入綁定碼</div></div>
-        </div>
-        {(!st.has_keys || editKeys) ? <>
-          <label className="field">Channel access token（長期）<input type="password" id="line-token" autoComplete="off" value={tok} onChange={(e) => setTok(e.target.value)} /></label>
-          <label className="field">Channel secret<input type="password" id="line-secret" autoComplete="off" value={sec} onChange={(e) => setSec(e.target.value)} /></label>
-          <div className="field">Webhook URL（貼到 LINE Developers 的 Messaging API 設定）<div className="date-add"><input type="text" readOnly value={LINE_HOOK} id="line-hook" /><button type="button" className="btn sm line" onClick={() => copy(LINE_HOOK)}>複製</button></div></div>
-          <div className="row">{st.has_keys && <button className="btn line" onClick={() => setEditKeys(false)}>取消</button>}
-            <button className="btn" disabled={tok.trim().length < 20 || sec.trim().length < 10} onClick={async () => { const r = await ui.busy(rpc("line_save_keys", { p_token: tok, p_secret: sec })); if (r !== undefined) { setTok(""); setSec(""); setEditKeys(false); ui.toast("金鑰已安全儲存"); load(); } }}>儲存金鑰</button></div>
-          <small className="hint">金鑰存在雲端保險箱，App 和孩子都看不到。</small>
-        </> : !st.bound ? <>
-          {st.code ? <div className="bind-code"><small>在家庭 LINE 群組輸入</small><b>綁定 {st.code}</b><small>30 分鐘內有效</small><button className="btn sm line" onClick={() => copy(`綁定 ${st.code}`)}>複製</button></div>
-            : <p className="hint">先把官方帳號加進家庭群組，再按下面產生綁定碼。</p>}
-          <div className="row"><button className="btn" onClick={async () => { const r = await ui.busy(rpc<string>("line_new_code")); if (r !== undefined) load(); }}>{st.code ? "重新產生綁定碼" : "產生綁定碼"}</button><button className="btn line" onClick={load}>我輸入了，重新整理</button></div>
-          <button className="link" onClick={() => setEditKeys(true)}>重新填寫金鑰</button>
-        </> : <>
-          <div className="set-row"><div>✅ 已連結家庭群組<small>{st.bound_at ? new Date(st.bound_at).toLocaleDateString("zh-TW") + " 綁定" : ""}</small></div>
-            <button type="button" role="switch" id="line-on" aria-checked={on} className={`switch ${on ? "on" : ""}`} onClick={async () => { const r = await ui.busy(rpc("save_settings", { p: { line_on: on ? 0 : 1 } })); if (r !== undefined) { refresh(); ui.toast(on ? "已暫停 LINE 通知" : "LINE 通知已開啟"); } }} /></div>
-          <small className="hint">會傳到群組的事：兌換申請、孩子完成交辦、扣點、連續達成、每週報告。</small>
-          <div className="row"><button className="btn line" onClick={async () => { const r = await ui.busy(rpc("line_test")); if (r !== undefined) ui.toast("已送出測試訊息，看看群組"); }}>傳送測試</button>
-            <button className="btn line" onClick={async () => { const r = await ui.busy(rpc("line_unbind")); if (r !== undefined) { ui.toast("已解除綁定"); load(); } }}>解除綁定</button></div>
-        </>}
-      </>}
-    </div></>;
 }

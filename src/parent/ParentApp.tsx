@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { PullScreen } from "../ui/Pull";
 import { useStore } from "../store";
 import { useDailyBrief } from "../Brief";
 import { useTab, useUi } from "../ui/ui";
-import { Redemption, Task, Wallet, rpc, sb } from "../supabase";
+import { Redemption, Streak, Task, Wallet, rpc, sb } from "../supabase";
 import { Queue } from "./Queue";
 import { Manage } from "./Manage";
 import { Errands, ErrandSheet } from "./Errands";
@@ -12,14 +13,14 @@ import { History } from "../History";
 const TABS = [["queue", "✅", "待辦"], ["errands", "📌", "交辦"], ["history", "📖", "回顧"], ["manage", "🗂️", "任務獎勵"], ["settings", "⚙️", "設定"]] as const;
 type Tab = (typeof TABS)[number][0];
 
-export interface ParentData { queue: Task[]; reds: Redemption[]; wallets: Record<string, Wallet>; reload: () => Promise<void> }
+export interface ParentData { queue: Task[]; reds: Redemption[]; wallets: Record<string, Wallet>; streaks: Record<string, Streak>; reload: () => Promise<void> }
 
 export function ParentApp() {
   const { me, members, tick } = useStore(); const ui = useUi();
   const [tab, setTab] = useTab<Tab>(TABS.map((t) => t[0]), "queue");
   useDailyBrief((t) => { if (me?.role !== "guest") setTab(t as Tab); });
   const [fab, setFab] = useState(false);
-  const [d, setD] = useState<Omit<ParentData, "reload">>({ queue: [], reds: [], wallets: {} });
+  const [d, setD] = useState<Omit<ParentData, "reload">>({ queue: [], reds: [], wallets: {}, streaks: {} });
   const kids = members.filter((m) => m.role === "child");
   const isGuest = me?.role === "guest";
 
@@ -33,7 +34,9 @@ export function ParentApp() {
       ...kids.map((k) => rpc<Wallet>("get_wallet", { p_member: k.id })),
     ]);
     const wallets: Record<string, Wallet> = {}; (ws as Wallet[]).forEach((w) => (wallets[w.member_id] = w));
-    setD({ queue: (q.data ?? []) as Task[], reds: (r.data ?? []) as Redemption[], wallets });
+    const streaks: Record<string, Streak> = {};
+    (await Promise.all(kids.map((k) => rpc<Streak>("get_streak", { p_member: k.id }).catch(() => null)))).forEach((x, i) => { if (x) streaks[kids[i].id] = x; });
+    setD({ queue: (q.data ?? []) as Task[], reds: (r.data ?? []) as Redemption[], wallets, streaks });
   }, [me, kids.map((k) => k.id).join(), isGuest]); // eslint-disable-line
   useEffect(() => { reload(); }, [reload, tick]);
   const data: ParentData = { ...d, reload };
@@ -42,13 +45,13 @@ export function ParentApp() {
   if (isGuest) return <div className="app mode-parent"><div className="screen"><div className="card empty"><span className="big">👋</span>訪客身份目前只能看看。</div><button className="btn line" onClick={() => sb.auth.signOut()}>登出</button></div></div>;
 
   return <div className="app mode-parent">
-    <div className="screen">
+    <PullScreen>
       {tab === "queue" && <Queue data={data} />}
       {tab === "manage" && <Manage />}
       {tab === "errands" && <Errands />}
       {tab === "history" && <History />}
       {tab === "settings" && <Settings />}
-    </div>
+    </PullScreen>
     {fab && <div className="fab-menu">
       <button onClick={() => { setFab(false); ui.sheet(<BonusSheet onDone={reload} />); }}>⭐ 給激勵點</button>
       <button onClick={() => { setFab(false); ui.sheet(<ErrandSheet />); }}>📌 交辦事項</button>

@@ -77,5 +77,5 @@ export const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeS
 export const PACK_DEFAULT: Record<string, string> = { am: "07:30", pm: "18:00", bed: "21:00" };
 export const packTime = (settings: Record<string, number | string> | undefined, pk: string) => `${String(settings?.[`pack_${pk}`] ?? PACK_DEFAULT[pk] ?? "")} 前`;
 
-export interface Streak { current: number; today_done: boolean; b7: number; b30: number }
+export interface Streak { current: number; today_done: boolean; b7: number; b30: number; today_total?: number; today_approved?: number; today_submitted?: number }
 export interface WeekReport { start: string; end: string; earned: number; deducted: number; spent: number; saved: number; interest: number; routine_total: number; routine_done: number; errands_done: number; proposals_done: number; ratings: Record<string, number>; streak: number; spend_balance: number; jar: number }

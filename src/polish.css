@@ -176,7 +176,7 @@ h2.sec{animation:rise .38s var(--ease-out) both}
 .rate-opt span{font-size:30px;line-height:1}
 .rate-opt:active{transform:scale(.95);border-color:var(--accent);background:var(--accent-soft)}
 
-/* v1.6 連續達成、存錢目標、扣點、每週報告、LINE */
+/* v1.6 連續達成、存錢目標、扣點、每週報告 */
 .card.streak{display:flex;align-items:center;gap:12px;padding:12px 14px}
 .card.streak .fire{font-size:30px;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);flex:none}
 .card.streak.hot .fire{background:var(--gold-soft);animation:fp-flame 2.4s ease-in-out infinite}
@@ -202,11 +202,17 @@ h2.sec{animation:rise .38s var(--ease-out) both}
 .rule-group{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--surface-2)}
 .rule-group>small{color:var(--muted);font-size:12px;margin-top:-6px}
 .rule-group textarea,.field textarea{font:inherit;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);color:var(--ink);resize:vertical;width:100%;box-sizing:border-box}
-.bind-code{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px;border-radius:14px;border:2px dashed var(--gold);background:var(--gold-soft)}
-.bind-code b{font-family:var(--f-num);font-size:28px;letter-spacing:2px}
-.bind-code small{color:var(--muted);font-size:12px}
-.line-card .step small{display:block;color:var(--muted);font-size:12px}
-.line-card input[readonly]{font-size:12px;color:var(--muted)}
 .q-photo.ph{height:160px;background:var(--surface-2);animation:fp-pulse 1.2s ease-in-out infinite}
 @keyframes fp-pulse{50%{opacity:.5}}
 .report-btn{margin-bottom:2px}
+
+/* v1.7 孩子總覽、下拉重新整理 */
+.kid-over{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kid-over .card.ko{margin:0;padding:12px;display:flex;flex-direction:column;gap:6px}
+.ko-head{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.ko-head b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ko-fire{font-size:12px;font-weight:700;color:#d9480f;background:#fff4e6;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.ko-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:13px}
+.ko-row small{color:var(--muted);font-size:12px;text-align:right}
+.ptr{display:flex;justify-content:center;align-items:center;overflow:hidden;color:var(--muted);font-size:12px;transition:height .2s var(--ease-out)}
+.ptr .spinner{width:20px;height:20px;margin:0}

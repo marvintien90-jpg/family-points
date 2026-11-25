@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PullScreen } from "../ui/Pull";
 import { useStore } from "../store";
 import { useDailyBrief } from "../Brief";
 import { useUi, RollNumber, floatPoints, useTab } from "../ui/ui";
@@ -54,14 +55,14 @@ export function KidApp() {
 
   const data: KidData = { ...d, reload };
   return <div className="app mode-kid">
-    <div className="screen">
+    <PullScreen>
       {tab !== "jar" && tab !== "history" && <Hero data={data} />}
       {tab === "today" && <Today data={data} />}
       {tab === "shop" && <Shop data={data} goJar={() => setTab("jar")} />}
       {tab === "jar" && <Jar data={data} />}
       {tab === "history" && <History />}
       {tab === "me" && <Me data={data} />}
-    </div>
+    </PullScreen>
     <nav className="tabs">{TABS.map(([k, i, l]) => <button key={k} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}><span className="ic">{i}</span>{l}</button>)}</nav>
   </div>;
 }
